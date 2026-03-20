@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environnements
+.env
+.venv
+env/
+venv/
+
+# Poetry
+.poetry/
+poetry.lock
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (IMPORTANT)
+data/raw/
+data/processed/
+data/interim/
+
+# Outputs
+outputs/
+models/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

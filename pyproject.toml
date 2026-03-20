@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "technova-attrition"
+version = "0.1.0"
+description = "OP - Projet 4 - Classier automatiques des informations"
+authors = ["Maxime <maximebarbier57@gmail.com>"]
+license = "MIT"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.12"
+pandas = "^2.2.3"
+numpy = "^1.26.4"
+scikit-learn = "^1.5.2"
+scipy = "^1.14.1"
+matplotlib = "^3.9.2"
+seaborn = "^0.13.2"
+jupyter = "^1.1.1"
+ipykernel = "^6.29.5"
+shap = "^0.46.0"
+xgboost = "^2.1.1"
+lightgbm = "^4.5.0"
+catboost = "^1.2.7"
+imbalanced-learn = "^0.12.4"
+openpyxl = "^3.1.5"
+pyarrow = "^17.0.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8.0"
+isort = "^5.13.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
