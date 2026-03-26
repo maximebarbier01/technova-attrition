@@ -36,7 +36,7 @@ def detect_outliers_iqr(df, factor=1.5):
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_lorenz(series, ax=None, label=None):
+def plot_lorenz(series, ax=None, label=None, title=None):
     s = series.dropna().sort_values()
     
     cum_values = s.cumsum()
@@ -49,9 +49,11 @@ def plot_lorenz(series, ax=None, label=None):
     ax.plot(cum_pop, cum_share, label=label)
     ax.plot([0,1], [0,1], linestyle="--", color="grey")
     
-    ax.set_xlabel("Part cumulée des bâtiments")
+    col_name = series.name if series.name is not None else "variable"
+    
+    ax.set_xlabel(f"Part cumulée ({col_name})")
     ax.set_ylabel("Part cumulée de la variable")
-    ax.set_title("Courbe de Lorenz")
+    ax.set_title(title if title else "Courbe de Lorenz")
     
     if label:
         ax.legend()
