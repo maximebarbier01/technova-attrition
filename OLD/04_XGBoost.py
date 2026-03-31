@@ -46,9 +46,9 @@ from sklearn.model_selection import GridSearchCV
 # =========================
 sys.path.append(os.path.abspath(".."))  # si notebook dans /notebooks
 
-import src.outliers as of
+import src.utils.outliers as of
 import src.distrib_pred_type as dpt
-import src.outliers_treatment as ot
+import src.utils.outliers_treatment as ot
 
 
 # *****************************************

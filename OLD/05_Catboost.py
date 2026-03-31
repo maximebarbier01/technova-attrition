@@ -45,7 +45,7 @@ from catboost import CatBoostClassifier
 # =========================
 sys.path.append(os.path.abspath(".."))  # si notebook dans /notebooks
 
-import src.outliers as of
+import src.utils.outliers as of
 import src.distrib_pred_type as dpt
 
 

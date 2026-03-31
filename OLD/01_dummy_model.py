@@ -44,7 +44,7 @@ from imblearn.pipeline import Pipeline as ImbPipeline
 # =========================
 sys.path.append(os.path.abspath(".."))  # si notebook dans /notebooks
 
-import src.outliers as of
+import src.utils.outliers as of
 
 # *****************************************
 # *          IMPORT DES TABLES            *

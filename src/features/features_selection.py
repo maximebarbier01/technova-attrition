@@ -1,5 +1,5 @@
 NUM_FEATURES = [
-#    "age",
+    "age",
     "revenu_mensuel",
     "annee_experience_totale",
     "annees_dans_l_entreprise",

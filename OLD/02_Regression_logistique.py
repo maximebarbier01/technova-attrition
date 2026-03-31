@@ -44,7 +44,7 @@ from imblearn.pipeline import Pipeline as ImbPipeline
 # =========================
 sys.path.append(os.path.abspath(".."))  # si notebook dans /notebooks
 
-import src.outliers as of
+import src.utils.outliers as of
 import src.distrib_pred_type as dpt
 
 # *****************************************
@@ -436,4 +436,4 @@ color_palette = {
 
 dpt.plot_probability_disrtib_per_pred_type(X_test,categories_to_exclude=["true_positive","false_negative"])
 
-dpt.plot_probability_disrtib_per_pred_type(X_train,categories_to_exclude=["true_negative","false_positive"])
+dpt.plot_probability_disrtib_per_pred_type(X_train,categories_to_exclude=["true_negative","true_negative"])

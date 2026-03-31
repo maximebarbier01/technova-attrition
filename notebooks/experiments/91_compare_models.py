@@ -14,6 +14,7 @@ from src.models.xgboost_model import build_xgboost_pipeline
 from src.models.catboost_model import build_catboost_model
 from src.models.train import train_model
 from src.models.compare import compare_models, compare_models_with_optimal_threshold, find_best_threshold, evaluate_binary_classifier, compare_models_with_pr_optimal_threshold, compare_models_with_target_recall
+from src.utils.distrib_pred_type import plot_probability_distrib_per_pred_type, plot_numeric_distributions_by_prediction_type
 
 # *****************************************
 # *          IMPORT DES TABLES            *
@@ -147,6 +148,41 @@ results_recall = compare_models_with_target_recall(
 results_recall.round(3)
 
 # *****************************************
+# *           ZOOM SUR XGBOOST            *
+# *****************************************
+
+best_thresh_xgb, best_f1_xgb = find_best_threshold(
+    model=trained_models["xgboost"],
+    X_test=X_test,
+    y_test=y_test,
+)
+
+plot_probability_distrib_per_pred_type(
+    model=trained_models["xgboost"],  # ou log_reg etc
+    X=X_test,
+    y=y_test,
+    threshold=best_thresh_xgb,
+    categories_to_exclude=["true_negative","false_positive"],
+)
+
+plot_probability_distrib_per_pred_type(
+    model=trained_models["xgboost"],  # ou log_reg etc
+    X=X_test,
+    y=y_test,
+    threshold=best_thresh_xgb,
+    categories_to_exclude=["true_positive", "false_negative"],
+)
+
+plot_numeric_distributions_by_prediction_type(
+    model=trained_models["xgboost"],
+    X=X_test,
+    y=y_test,
+    num_features=NUM_FEATURES,
+    threshold=best_thresh_xgb,
+    features_per_row=3
+)
+
+# *****************************************
 # *        ZOOM SUR           *
 # *****************************************
 
@@ -157,7 +193,7 @@ best_thresh_xgb, best_f1_xgb = find_best_threshold(
 )
 
 xgb_metrics = evaluate_binary_classifier(
-    model=trained_models["catboost"],
+    model=trained_models["xgboost"],
     X_test=X_test,
     y_test=y_test,
     threshold=best_thresh_xgb,
@@ -167,3 +203,12 @@ xgb_metrics = pd.DataFrame(xgb_metrics)
 
 print(best_thresh_xgb, best_f1_xgb)
 print(xgb_metrics)
+
+
+plot_numeric_distributions_by_prediction_type(
+    model=trained_models["catboost"],
+    X=X_test,
+    y=y_test,
+    num_features=num_features,
+    threshold=0.5,
+)
