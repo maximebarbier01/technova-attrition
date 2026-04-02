@@ -1,20 +1,30 @@
 import sys
 from pathlib import Path
 import pandas as pd
+import matplotlib.pyplot as plt
+
+from sklearn.metrics import precision_recall_curve, auc
 
 PROJECT_ROOT = Path.cwd().resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 from src.data.split_data import make_train_test_split
 from src.data.preprocessing import build_preprocessor, filter_existing_features
-from src.features.features_selection import NUM_FEATURES, CAT_FEATURES, TARGET, DROP_COLUMNS
+from src.features.features_selection import FEATURE_SETS, TARGET, DROP_COLUMNS
+from src.features.feature_engineering import make_feature_engineering
 from src.models.logistic_regression_model import build_logistic_regression_pipeline
 from src.models.random_forest import build_random_forest_pipeline
 from src.models.xgboost_model import build_xgboost_pipeline
 from src.models.catboost_model import build_catboost_model
 from src.models.train import train_model
 from src.models.compare import compare_models, compare_models_with_optimal_threshold, find_best_threshold, evaluate_binary_classifier, compare_models_with_pr_optimal_threshold, compare_models_with_target_recall
-from src.utils.distrib_pred_type import plot_probability_distrib_per_pred_type, plot_numeric_distributions_by_prediction_type
+from src.utils.visualization import (
+    plot_probability_distrib_per_pred_type, 
+    plot_numeric_distributions_by_prediction_type, 
+    plot_numeric_feature_diagnostics, 
+    summarize_numeric_feature_diagnostics,
+    plot_categorical_feature_diagnostics
+)
 
 # *****************************************
 # *          IMPORT DES TABLES            *
@@ -24,8 +34,19 @@ df = pd.read_csv("/home/maxime/projects/technova-attrition/data/interim/data.csv
 df = df.drop(columns=DROP_COLUMNS).copy()
 
 # *****************************************
+# *        FEATURES ENGINEERING           *
+# *****************************************
+
+df = make_feature_engineering(df)
+
+# *****************************************
 # *            SPLIT & SCALE              *
 # *****************************************
+
+feature_config = FEATURE_SETS["advanced"]
+
+NUM_FEATURES = feature_config["num"]
+CAT_FEATURES = feature_config["cat"]
 
 feature_columns = NUM_FEATURES + CAT_FEATURES
 
@@ -101,7 +122,7 @@ results_05 = compare_models(
     sort_by="roc_auc",
 )
 
-results_05.round(3)
+results_05.round(2)
 
 # *****************************************
 # *        COMPARAISON SEUIL OPT          *
@@ -131,6 +152,23 @@ results_pr = compare_models_with_pr_optimal_threshold(
 
 results_pr.round(2)
 
+#todo tracer la courbe precision rappel selon le modèle utilisé 
+
+y_proba = trained_models["catboost"].predict_proba(X_test)[:, 1]
+
+precision_test, recall_test, thresholds_test = precision_recall_curve(
+    y_test, y_proba
+)
+
+plt.plot(recall_test, precision_test, label="Precision-Recall Curve")
+plt.xlabel("Recall")
+plt.ylabel("Precision")
+plt.title("Precision-Recall Curve Test Set")
+plt.legend()
+plt.show()
+
+auc_test = auc(recall_test, precision_test)
+
 # *****************************************
 # *  COMPARAISON SEUIL POUR RECALL CIBLE  *
 # *****************************************
@@ -145,20 +183,20 @@ results_recall = compare_models_with_target_recall(
     sort_by="precision_1",
 )
 
-results_recall.round(3)
+results_recall.round(2)
 
 # *****************************************
 # *           ZOOM SUR XGBOOST            *
 # *****************************************
 
 best_thresh_xgb, best_f1_xgb = find_best_threshold(
-    model=trained_models["xgboost"],
+    model=trained_models["log_reg"],
     X_test=X_test,
     y_test=y_test,
 )
 
 plot_probability_distrib_per_pred_type(
-    model=trained_models["xgboost"],  # ou log_reg etc
+    model=trained_models["log_reg"],  # ou log_reg etc
     X=X_test,
     y=y_test,
     threshold=best_thresh_xgb,
@@ -166,7 +204,7 @@ plot_probability_distrib_per_pred_type(
 )
 
 plot_probability_distrib_per_pred_type(
-    model=trained_models["xgboost"],  # ou log_reg etc
+    model=trained_models["log_reg"],  # ou log_reg etc
     X=X_test,
     y=y_test,
     threshold=best_thresh_xgb,
@@ -174,7 +212,7 @@ plot_probability_distrib_per_pred_type(
 )
 
 plot_numeric_distributions_by_prediction_type(
-    model=trained_models["xgboost"],
+    model=trained_models["log_reg"],
     X=X_test,
     y=y_test,
     num_features=NUM_FEATURES,
@@ -182,33 +220,20 @@ plot_numeric_distributions_by_prediction_type(
     features_per_row=3
 )
 
-# *****************************************
-# *        ZOOM SUR           *
-# *****************************************
-
-best_thresh_xgb, best_f1_xgb = find_best_threshold(
-    model=trained_models["xgboost"],
-    X_test=X_test,
-    y_test=y_test,
-)
-
-xgb_metrics = evaluate_binary_classifier(
-    model=trained_models["xgboost"],
-    X_test=X_test,
-    y_test=y_test,
-    threshold=best_thresh_xgb,
-)
-
-xgb_metrics = pd.DataFrame(xgb_metrics)
-
-print(best_thresh_xgb, best_f1_xgb)
-print(xgb_metrics)
-
-
-plot_numeric_distributions_by_prediction_type(
-    model=trained_models["catboost"],
+plot_numeric_feature_diagnostics(
+    model=trained_models["log_reg"],
     X=X_test,
     y=y_test,
     num_features=num_features,
-    threshold=0.5,
+    threshold=best_thresh_xgb,
+    kind="kde",
+)
+
+plot_categorical_feature_diagnostics(
+    model=trained_models["log_reg"],
+    X=X_test,
+    y=y_test,
+    cat_features=CAT_FEATURES,
+    threshold=best_thresh_xgb,
+    top_n=20
 )
