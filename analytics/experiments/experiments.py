@@ -12,11 +12,7 @@ from src.data.split_data import make_train_test_split
 from src.data.preprocessing import build_preprocessor, filter_existing_features
 from src.features.features_selection import TARGET, DROP_COLUMNS, get_feature_set
 from src.features.feature_engineering import make_feature_engineering
-from src.models.logistic_regression_model import build_logistic_regression_pipeline, build_lasso_logistic_regression_pipeline, get_logistic_regression_param_grid, get_lasso_logistic_regression_param_grid
-from src.models.random_forest import build_random_forest_pipeline, get_random_forest_param_grid, get_random_forest_param_distributions
-from src.models.xgboost_model import build_xgboost_pipeline
-from src.models.catboost_model import build_catboost_model
-from src.models.dummy_classifier import get_dummy_model
+from src.models.model_specs import get_baseline_model_specs, get_tuned_model_specs
 from src.models.train import train_model, train_model_with_gridsearch, train_model_with_randomized_search
 from src.models.compare import compare_models, compare_models_with_optimal_threshold, find_best_threshold, evaluate_binary_classifier, compare_models_with_pr_optimal_threshold, compare_models_with_target_recall
 from src.utils.visualization import (
@@ -77,129 +73,28 @@ preprocessor = build_preprocessor(
 # *              MODELES                  *
 # *****************************************
 
-#? DUMMY CLASSIFIER
-dum_class = get_dummy_model()
+#? PARAMETRES 
 
-#? LOGISTIC REGRESSION 
-log_reg = build_logistic_regression_pipeline(preprocessor, random_state=51)
-grid_log_reg = train_model_with_gridsearch(
-    model=log_reg,
-    X_train=X_train,
-    y_train=y_train,
-    param_grid=get_logistic_regression_param_grid(),
-    scoring="average_precision",
-)
+seed=51
+scoring_metric = "average_precision"
 
-lasso_log_reg = build_lasso_logistic_regression_pipeline(
+baseline_specs = get_baseline_model_specs(
     preprocessor=preprocessor,
-    random_state=51,
+    cat_features=cat_features,
+    seed=seed
 )
 
-grid_lasso_log_reg = train_model_with_gridsearch(
-    model=lasso_log_reg,
+tuned_specs = get_tuned_model_specs(
+    preprocessor=preprocessor,
+    cat_features=cat_features,
     X_train=X_train,
     y_train=y_train,
-    param_grid=get_lasso_logistic_regression_param_grid(),
-    scoring="average_precision",
+    seed=seed,
+    scoring=scoring_metric
+    
 )
 
-#? RANDOM FOREST
-rf = build_random_forest_pipeline(preprocessor, random_state=51)
-
-grid_rf = train_model_with_gridsearch(
-    model=rf,
-    X_train=X_train,
-    y_train=y_train,
-    param_grid=get_random_forest_param_grid(),
-    scoring="average_precision",
-)
-
-random_rf = build_random_forest_pipeline(preprocessor, random_state=51)
-
-random_search_rf = train_model_with_randomized_search(
-    model=random_rf,
-    X_train=X_train,
-    y_train=y_train,
-    param_distributions=get_random_forest_param_distributions(),
-    n_iter=20,
-    scoring="average_precision",
-    random_state=51,
-)
-
-#? XGBOOST
-xgb = build_xgboost_pipeline(preprocessor, random_state=51)
-
-#? CATBOOST
-cat = build_catboost_model(random_state=51)
-
-model_specs = {
-    "dummy_classifier": {
-        "model": dum_class,
-        "fit_kwargs": {},
-        "already_trained": False,
-        "family": "baseline",
-    },
-    #? LOGISTIC REGRESSION 
-    "log_reg": {
-        "model": log_reg,
-        "fit_kwargs": {},
-        "already_trained": False,
-        "family": "logistic_regression",
-    },
-    "best_log_reg_grid": {
-        "model": grid_log_reg.best_estimator_,
-        "fit_kwargs": {},
-        "already_trained": True,
-        "family": "logistic_regression",
-    },
-    "lasso_log_reg": {
-        "model": lasso_log_reg,
-        "fit_kwargs": {},
-        "already_trained": False,
-        "family": "logistic_regression_l1",
-    },
-    "best_lasso_log_reg_grid": {
-        "model": grid_lasso_log_reg.best_estimator_,
-        "fit_kwargs": {},
-        "already_trained": True,
-        "family": "logistic_regression_l1",
-    },
-    #? RANDOM FOREST
-    "random_forest": {
-        "model": rf,
-        "fit_kwargs": {},
-        "already_trained": False,
-        "family": "tree_ensemble",
-    },
-    "best_random_forest_grid": {
-        "model": grid_rf.best_estimator_,
-        "fit_kwargs": {},
-        "already_trained": True,
-        "family": "tree_ensemble",
-        "search_type": "grid",
-    },
-    "best_random_forest_random": {
-        "model": random_search_rf.best_estimator_,
-        "fit_kwargs": {},
-        "already_trained": True,
-        "family": "tree_ensemble",
-        "search_type": "randomized",
-    },
-    #? XGBOOST
-    "xgboost": {
-        "model": xgb,
-        "fit_kwargs": {},
-        "already_trained": False,
-        "family": "boosting",
-    },
-    #? CAT BOOST
-    "catboost": {
-        "model": cat,
-        "fit_kwargs": {"cat_features": cat_features},
-        "already_trained": False,
-        "family": "boosting_cat",
-    },
-}
+model_specs = {**baseline_specs, **tuned_specs}
 
 # *****************************************
 # *             ENTRAINEMENT              *
@@ -248,7 +143,9 @@ results_pr.round(2)
 
 #todo tracer la courbe precision rappel selon le modèle utilisé 
 
-y_proba = trained_models["random_forest"].predict_proba(X_test)[:, 1]
+model = "best_random_forest_grid"
+
+y_proba = trained_models[model].predict_proba(X_test)[:, 1]
 
 precision_test, recall_test, thresholds_test = precision_recall_curve(
     y_test, y_proba
@@ -257,7 +154,7 @@ precision_test, recall_test, thresholds_test = precision_recall_curve(
 plt.plot(recall_test, precision_test, label="Precision-Recall Curve")
 plt.xlabel("Recall")
 plt.ylabel("Precision")
-plt.title("Precision-Recall Curve Test Set")
+plt.title(f"PRC de {model}")
 plt.legend()
 plt.show()
 
