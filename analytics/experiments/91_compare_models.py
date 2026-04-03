@@ -10,7 +10,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.data.split_data import make_train_test_split
 from src.data.preprocessing import build_preprocessor, filter_existing_features
-from src.features.features_selection import FEATURE_SETS, TARGET, DROP_COLUMNS
+from src.features.features_selection import TARGET, DROP_COLUMNS, get_feature_set
 from src.features.feature_engineering import make_feature_engineering
 from src.models.logistic_regression_model import build_logistic_regression_pipeline
 from src.models.random_forest import build_random_forest_pipeline
@@ -30,7 +30,7 @@ from src.utils.visualization import (
 # *          IMPORT DES TABLES            *
 # *****************************************
 
-df = pd.read_csv("/home/maxime/projects/technova-attrition/data/interim/data.csv")
+df = pd.read_csv("/home/maxime/projects/technova-attrition/data/interim/data_eda.csv")
 df = df.drop(columns=DROP_COLUMNS).copy()
 
 # *****************************************
@@ -40,13 +40,18 @@ df = df.drop(columns=DROP_COLUMNS).copy()
 df = make_feature_engineering(df)
 
 # *****************************************
-# *            SPLIT & SCALE              *
+# *           FEATURES SET                *
 # *****************************************
 
-feature_config = FEATURE_SETS["advanced"]
+feature_set_name = "fe_full_robust"
+feature_config = get_feature_set(feature_set_name)
 
 NUM_FEATURES = feature_config["num"]
 CAT_FEATURES = feature_config["cat"]
+
+# *****************************************
+# *            SPLIT & SCALE              *
+# *****************************************
 
 feature_columns = NUM_FEATURES + CAT_FEATURES
 
@@ -154,7 +159,7 @@ results_pr.round(2)
 
 #todo tracer la courbe precision rappel selon le modèle utilisé 
 
-y_proba = trained_models["catboost"].predict_proba(X_test)[:, 1]
+y_proba = trained_models["random_forest"].predict_proba(X_test)[:, 1]
 
 precision_test, recall_test, thresholds_test = precision_recall_curve(
     y_test, y_proba
@@ -170,7 +175,7 @@ plt.show()
 auc_test = auc(recall_test, precision_test)
 
 # *****************************************
-# *  COMPARAISON SEUIL POUR RECALL CIBLE  *
+# *     COMPARAISON PAR RECALL CIBLE      *
 # *****************************************
 
 from src.models.compare import compare_models_with_target_recall
@@ -179,32 +184,86 @@ results_recall = compare_models_with_target_recall(
     trained_models=trained_models,
     X_test=X_test,
     y_test=y_test,
-    target_recall=0.70,
+    target_recall=0.9,
     sort_by="precision_1",
 )
 
 results_recall.round(2)
 
+# ******************************************
+# *  DATASET AVEC TOUTES LES COMPARAISONS  *
+# ******************************************
+
+df1 = results_05[['model', 'threshold', 'precision_1', 'recall_1', 'f1_1',
+                  'prc_auc', 'tn', 'fp', 'fn', 'tp']].copy()
+
+df2 = results_opt[['model', 'best_threshold', 'precision_1', 'recall_1', 'f1_optimized',
+                   'prc_auc', 'tn', 'fp', 'fn', 'tp']].copy()
+
+df3 = results_pr[['model', 'best_threshold', 'precision_1', 'recall_1', 'f1_1',
+                  'prc_auc', 'tn', 'fp', 'fn', 'tp']].copy()
+
+df4 = results_recall[['model', 'best_threshold', 'precision_1', 'recall_1', 'f1_1',
+                      'prc_auc', 'tn', 'fp', 'fn', 'tp']].copy()
+
+# Harmonisation
+df1 = df1.rename(columns={"threshold": "best_threshold"})
+df2 = df2.rename(columns={"f1_optimized": "f1_1"})
+
+# Colonnes de contexte
+df1["strategie_seuil"] = "seuil à 0.5"
+df2["strategie_seuil"] = "seuil optimisé"
+df3["strategie_seuil"] = "seuil optimisé sur PRC"
+df4["strategie_seuil"] = "recall cible à 0.9"
+
+df1["feature_set"] = feature_set_name
+df2["feature_set"] = feature_set_name
+df3["feature_set"] = feature_set_name
+df4["feature_set"] = feature_set_name
+
+# Concat
+df_all_results = pd.concat([df1, df2, df3, df4], ignore_index=True)
+
+# Ordre des colonnes
+cols = df_all_results.columns.tolist()
+
+cols.insert(cols.index("model") + 1, cols.pop(cols.index("strategie_seuil")))
+cols.insert(cols.index("strategie_seuil") + 1, cols.pop(cols.index("feature_set")))
+
+df_all_results = df_all_results[cols]
+
+#? EXPORT 
+
+output_dir = Path("/home/maxime/projects/technova-attrition/data/processed")
+output_dir.mkdir(parents=True, exist_ok=True)
+
+file_path = output_dir / f"all_results_{feature_set_name}.xlsx"
+df_all_results.to_excel(file_path, index=False)
+
+print(f"Fichier exporté : {file_path}")
+
 # *****************************************
-# *           ZOOM SUR XGBOOST            *
+# *           ZOOM SUR UN MODEL           *
 # *****************************************
 
+best_model = "random_forest"
+
 best_thresh_xgb, best_f1_xgb = find_best_threshold(
-    model=trained_models["log_reg"],
+    model=trained_models[best_model],
     X_test=X_test,
     y_test=y_test,
 )
 
 plot_probability_distrib_per_pred_type(
-    model=trained_models["log_reg"],  # ou log_reg etc
+    model=trained_models[best_model],  # ou log_reg etc
     X=X_test,
     y=y_test,
-    threshold=best_thresh_xgb,
+    threshold=0.17,
     categories_to_exclude=["true_negative","false_positive"],
 )
 
 plot_probability_distrib_per_pred_type(
-    model=trained_models["log_reg"],  # ou log_reg etc
+    model=trained_models[best_model],  # ou log_reg etc
     X=X_test,
     y=y_test,
     threshold=best_thresh_xgb,
@@ -212,7 +271,7 @@ plot_probability_distrib_per_pred_type(
 )
 
 plot_numeric_distributions_by_prediction_type(
-    model=trained_models["log_reg"],
+    model=trained_models[best_model],
     X=X_test,
     y=y_test,
     num_features=NUM_FEATURES,
@@ -221,7 +280,7 @@ plot_numeric_distributions_by_prediction_type(
 )
 
 plot_numeric_feature_diagnostics(
-    model=trained_models["log_reg"],
+    model=trained_models[best_model],
     X=X_test,
     y=y_test,
     num_features=num_features,
@@ -230,7 +289,7 @@ plot_numeric_feature_diagnostics(
 )
 
 plot_categorical_feature_diagnostics(
-    model=trained_models["log_reg"],
+    model=trained_models[best_model],
     X=X_test,
     y=y_test,
     cat_features=CAT_FEATURES,

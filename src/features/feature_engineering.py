@@ -7,6 +7,8 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     
     df = df.copy()
 
+    #? CATEGORIAL FAEATURES
+
     #******* AGE *******   
     #df["is_young"] = (df["age"] < 30).astype(int)
 
@@ -17,14 +19,14 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
         bins=[0, 30, 45, 100],
         labels=["young", "mid", "senior"],
         include_lowest=True
-    )
+    ).astype("string")
 
     #******* REVENU *******   
     df["revenu_bin"] = pd.qcut(
-        df["revenu_mensuel"], 
-        q=4, 
+        df["revenu_mensuel"],
+        q=4,
         duplicates="drop"
-    )
+    ).astype("string")
     df["low_salary"] = (df["revenu_mensuel"] < 4000).astype(int)
 
     df["mid_salary"] = (
@@ -116,6 +118,92 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
         (df["mid_satisfaction"] == 1) &
         (df["mid_tenure"] == 1) &
         (df["mid_salary"] == 1)
+    ).astype(int)
+
+    #? NUMERIC FAEATURES
+
+    #******* STATUT MATRIMONIAL *******  
+    df["is_single"] = (df["statut_marital"] == "Célibataire").astype(int)
+
+    df["is_married"] = (df["statut_marital"] == "Marié(e)").astype(int) 
+
+    df["married_fn_risk"] = (
+        (df["statut_marital"] == "Marié(e)") &
+        (df["mid_satisfaction"] == 1)
+    ).astype(int)
+
+    #******* DEPARTEMENT *******    
+
+    df["is_consulting"] = (df["departement"] == "Consulting").astype(int)
+
+    df["is_commercial"] = (df["departement"] == "Commercial").astype(int)  
+
+    df["consulting_risk"] = (
+        (df["departement"] == "Consulting") &
+        (df["mid_satisfaction"] == 1)
+    ).astype(int)
+
+    #******* POSTE *******    
+
+    df["is_senior_role"] = df["poste"].isin([
+        "Senior Manager",
+        "Directeur Technique",
+        "Manager"
+    ]).astype(int)
+
+    df["is_senior_role"] = df["poste"].isin([
+        "Senior Manager",
+        "Directeur Technique",
+        "Manager"
+    ]).astype(int)
+
+    #******* DOMAINE D'ETUDE *******    
+    df["is_tech_profile"] = df["domaine_etude"].isin([
+        "Infra Cloud",
+        "Transformation Digitale"
+    ]).astype(int)
+
+    df["is_business_profile"] = df["domaine_etude"].isin([
+        "Marketing",
+        "Entrepreneuriat"
+    ]).astype(int)
+
+    df["tech_fn_risk"] = (
+        (df["is_tech_profile"] == 1) &
+        (df["mid_satisfaction"] == 1)
+    ).astype(int)
+
+    #******* FREQUENCE DEPLACEMENT *******    
+    df["frequent_travel"] = (df["frequence_deplacement"] == "Frequent").astype(int)
+
+    df["no_travel"] = (df["frequence_deplacement"] == "Aucun").astype(int)
+
+    df["travel_fn_risk"] = (
+        (df["frequent_travel"] == 1) &
+        (df["mid_satisfaction"] == 1)
+    ).astype(int)
+
+    #? FEATURES COMBINÉES
+
+    df["categorical_fn_profile"] = (
+        (df["is_consulting"] == 1) &
+        (df["frequent_travel"] == 1) &
+        (df["mid_satisfaction"] == 1)
+    ).astype(int)
+
+    df["senior_frustration"] = (
+        (df["is_senior_role"] == 1) &
+        (df["low_satisfaction"] == 1)
+    ).astype(int)
+
+    df["tech_stagnation"] = (
+        (df["is_tech_profile"] == 1) &
+        (df["stagnation_flag"] == 1)
+    ).astype(int)
+
+    df["consulting_travel_risk"] = (
+        (df["is_consulting"] == 1) &
+        (df["frequent_travel"] == 1)
     ).astype(int)
 
     return df 
