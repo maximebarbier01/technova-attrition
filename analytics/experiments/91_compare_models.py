@@ -12,11 +12,12 @@ from src.data.split_data import make_train_test_split
 from src.data.preprocessing import build_preprocessor, filter_existing_features
 from src.features.features_selection import TARGET, DROP_COLUMNS, get_feature_set
 from src.features.feature_engineering import make_feature_engineering
-from src.models.logistic_regression_model import build_logistic_regression_pipeline
+from src.models.logistic_regression_model import build_logistic_regression_pipeline, build_lasso_logistic_regression_pipeline, get_logistic_regression_param_grid, get_lasso_logistic_regression_param_grid
 from src.models.random_forest import build_random_forest_pipeline
 from src.models.xgboost_model import build_xgboost_pipeline
 from src.models.catboost_model import build_catboost_model
-from src.models.train import train_model
+from src.models.dummy_classifier import get_dummy_model
+from src.models.train import train_model, train_model_with_gridsearch
 from src.models.compare import compare_models, compare_models_with_optimal_threshold, find_best_threshold, evaluate_binary_classifier, compare_models_with_pr_optimal_threshold, compare_models_with_target_recall
 from src.utils.visualization import (
     plot_probability_distrib_per_pred_type, 
@@ -76,27 +77,93 @@ preprocessor = build_preprocessor(
 # *              MODELES                  *
 # *****************************************
 
+#? DUMMY CLASSIFIER
+dum_class = get_dummy_model()
+
+#? LOGISTIC REGRESSION 
 log_reg = build_logistic_regression_pipeline(preprocessor, random_state=51)
+grid_log_reg = train_model_with_gridsearch(
+    model=log_reg,
+    X_train=X_train,
+    y_train=y_train,
+    param_grid=get_logistic_regression_param_grid(),
+    scoring="average_precision",
+)
+
+best_log_reg = grid_log_reg.best_estimator_
+
+lasso_log_reg = build_lasso_logistic_regression_pipeline(
+    preprocessor=preprocessor,
+    random_state=51,
+)
+
+grid_lasso_log_reg = train_model_with_gridsearch(
+    model=lasso_log_reg,
+    X_train=X_train,
+    y_train=y_train,
+    param_grid=get_lasso_logistic_regression_param_grid(),
+    scoring="average_precision",
+)
+
+best_lasso_log_reg = grid_lasso_log_reg.best_estimator_
+
+#? RANDOM FOREST
 rf = build_random_forest_pipeline(preprocessor, random_state=51)
+
+#? XGBOOST
 xgb = build_xgboost_pipeline(preprocessor, random_state=51)
+
+#? CATBOOST
 cat = build_catboost_model(random_state=51)
 
 model_specs = {
+    "dummy_classifier": {
+        "model": dum_class,
+        "fit_kwargs": {},
+        "already_trained": False,
+        "family": "baseline",
+    },
     "log_reg": {
         "model": log_reg,
         "fit_kwargs": {},
+        "already_trained": False,
+        "family": "logistic_regression",
+    },
+    "best_log_reg_grid": {
+        "model": best_log_reg,
+        "fit_kwargs": {},
+        "already_trained": True,
+        "family": "logistic_regression",
+    },
+    "lasso_log_reg": {
+        "model": lasso_log_reg,
+        "fit_kwargs": {},
+        "already_trained": False,
+        "family": "logistic_regression_l1",
+    },
+    "best_lasso_log_reg_grid": {
+        "model": best_lasso_log_reg,
+        "fit_kwargs": {},
+        "already_trained": True,
+        "family": "logistic_regression_l1",
     },
     "random_forest": {
         "model": rf,
         "fit_kwargs": {},
+        "already_trained": False,
+        "family": "tree_ensemble",
     },
     "xgboost": {
         "model": xgb,
         "fit_kwargs": {},
+        "already_trained": False,
+        "family": "boosting",
     },
     "catboost": {
         "model": cat,
         "fit_kwargs": {"cat_features": cat_features},
+        "already_trained": False,
+        "family": "boosting_cat",
     },
 }
 
@@ -107,13 +174,15 @@ model_specs = {
 trained_models = {}
 
 for model_name, spec in model_specs.items():
-    print(f"Entraînement : {model_name}")
-    trained_models[model_name] = train_model(
-        model=spec["model"],
-        X_train=X_train,
-        y_train=y_train,
-        **spec["fit_kwargs"],
-    )
+    if spec["already_trained"]:
+        trained_models[model_name] = spec["model"]
+    else:
+        trained_models[model_name] = train_model(
+            model=spec["model"],
+            X_train=X_train,
+            y_train=y_train,
+            **spec["fit_kwargs"],
+        )
 
 # *****************************************
 # *        COMPARAISON SEUIL 0.5          *
@@ -128,20 +197,6 @@ results_05 = compare_models(
 )
 
 results_05.round(2)
-
-# *****************************************
-# *        COMPARAISON SEUIL OPT          *
-# *****************************************
-
-results_opt = compare_models_with_optimal_threshold(
-    trained_models=trained_models,
-    X_test=X_test,
-    y_test=y_test,
-    metric="f1",
-    sort_by="f1_1",
-)
-
-results_opt.round(2)
 
 # *****************************************
 # *     COMPARAISON SEUIL OPT sur PRC     *
@@ -197,9 +252,6 @@ results_recall.round(2)
 df1 = results_05[['model', 'threshold', 'precision_1', 'recall_1', 'f1_1',
                   'prc_auc', 'tn', 'fp', 'fn', 'tp']].copy()
 
-df2 = results_opt[['model', 'best_threshold', 'precision_1', 'recall_1', 'f1_optimized',
-                   'prc_auc', 'tn', 'fp', 'fn', 'tp']].copy()
-
 df3 = results_pr[['model', 'best_threshold', 'precision_1', 'recall_1', 'f1_1',
                   'prc_auc', 'tn', 'fp', 'fn', 'tp']].copy()
 
@@ -208,21 +260,18 @@ df4 = results_recall[['model', 'best_threshold', 'precision_1', 'recall_1', 'f1_
 
 # Harmonisation
 df1 = df1.rename(columns={"threshold": "best_threshold"})
-df2 = df2.rename(columns={"f1_optimized": "f1_1"})
 
 # Colonnes de contexte
 df1["strategie_seuil"] = "seuil à 0.5"
-df2["strategie_seuil"] = "seuil optimisé"
 df3["strategie_seuil"] = "seuil optimisé sur PRC"
 df4["strategie_seuil"] = "recall cible à 0.9"
 
 df1["feature_set"] = feature_set_name
-df2["feature_set"] = feature_set_name
 df3["feature_set"] = feature_set_name
 df4["feature_set"] = feature_set_name
 
 # Concat
-df_all_results = pd.concat([df1, df2, df3, df4], ignore_index=True)
+df_all_results = pd.concat([df1, df3, df4], ignore_index=True)
 
 # Ordre des colonnes
 cols = df_all_results.columns.tolist()
