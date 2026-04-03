@@ -13,11 +13,11 @@ from src.data.preprocessing import build_preprocessor, filter_existing_features
 from src.features.features_selection import TARGET, DROP_COLUMNS, get_feature_set
 from src.features.feature_engineering import make_feature_engineering
 from src.models.logistic_regression_model import build_logistic_regression_pipeline, build_lasso_logistic_regression_pipeline, get_logistic_regression_param_grid, get_lasso_logistic_regression_param_grid
-from src.models.random_forest import build_random_forest_pipeline
+from src.models.random_forest import build_random_forest_pipeline, get_random_forest_param_grid, get_random_forest_param_distributions
 from src.models.xgboost_model import build_xgboost_pipeline
 from src.models.catboost_model import build_catboost_model
 from src.models.dummy_classifier import get_dummy_model
-from src.models.train import train_model, train_model_with_gridsearch
+from src.models.train import train_model, train_model_with_gridsearch, train_model_with_randomized_search
 from src.models.compare import compare_models, compare_models_with_optimal_threshold, find_best_threshold, evaluate_binary_classifier, compare_models_with_pr_optimal_threshold, compare_models_with_target_recall
 from src.utils.visualization import (
     plot_probability_distrib_per_pred_type, 
@@ -90,8 +90,6 @@ grid_log_reg = train_model_with_gridsearch(
     scoring="average_precision",
 )
 
-best_log_reg = grid_log_reg.best_estimator_
-
 lasso_log_reg = build_lasso_logistic_regression_pipeline(
     preprocessor=preprocessor,
     random_state=51,
@@ -105,10 +103,28 @@ grid_lasso_log_reg = train_model_with_gridsearch(
     scoring="average_precision",
 )
 
-best_lasso_log_reg = grid_lasso_log_reg.best_estimator_
-
 #? RANDOM FOREST
 rf = build_random_forest_pipeline(preprocessor, random_state=51)
+
+grid_rf = train_model_with_gridsearch(
+    model=rf,
+    X_train=X_train,
+    y_train=y_train,
+    param_grid=get_random_forest_param_grid(),
+    scoring="average_precision",
+)
+
+random_rf = build_random_forest_pipeline(preprocessor, random_state=51)
+
+random_search_rf = train_model_with_randomized_search(
+    model=random_rf,
+    X_train=X_train,
+    y_train=y_train,
+    param_distributions=get_random_forest_param_distributions(),
+    n_iter=20,
+    scoring="average_precision",
+    random_state=51,
+)
 
 #? XGBOOST
 xgb = build_xgboost_pipeline(preprocessor, random_state=51)
@@ -123,6 +139,7 @@ model_specs = {
         "already_trained": False,
         "family": "baseline",
     },
+    #? LOGISTIC REGRESSION 
     "log_reg": {
         "model": log_reg,
         "fit_kwargs": {},
@@ -130,7 +147,7 @@ model_specs = {
         "family": "logistic_regression",
     },
     "best_log_reg_grid": {
-        "model": best_log_reg,
+        "model": grid_log_reg.best_estimator_,
         "fit_kwargs": {},
         "already_trained": True,
         "family": "logistic_regression",
@@ -142,23 +159,40 @@ model_specs = {
         "family": "logistic_regression_l1",
     },
     "best_lasso_log_reg_grid": {
-        "model": best_lasso_log_reg,
+        "model": grid_lasso_log_reg.best_estimator_,
         "fit_kwargs": {},
         "already_trained": True,
         "family": "logistic_regression_l1",
     },
+    #? RANDOM FOREST
     "random_forest": {
         "model": rf,
         "fit_kwargs": {},
         "already_trained": False,
         "family": "tree_ensemble",
     },
+    "best_random_forest_grid": {
+        "model": grid_rf.best_estimator_,
+        "fit_kwargs": {},
+        "already_trained": True,
+        "family": "tree_ensemble",
+        "search_type": "grid",
+    },
+    "best_random_forest_random": {
+        "model": random_search_rf.best_estimator_,
+        "fit_kwargs": {},
+        "already_trained": True,
+        "family": "tree_ensemble",
+        "search_type": "randomized",
+    },
+    #? XGBOOST
     "xgboost": {
         "model": xgb,
         "fit_kwargs": {},
         "already_trained": False,
         "family": "boosting",
     },
+    #? CAT BOOST
     "catboost": {
         "model": cat,
         "fit_kwargs": {"cat_features": cat_features},
