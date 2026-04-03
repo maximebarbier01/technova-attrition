@@ -12,14 +12,13 @@ from src.data.split_data import make_train_test_split
 from src.data.preprocessing import build_preprocessor, filter_existing_features
 from src.features.features_selection import TARGET, DROP_COLUMNS, get_feature_set
 from src.features.feature_engineering import make_feature_engineering
-from src.models.model_specs import get_baseline_model_specs, get_tuned_model_specs
-from src.models.train import train_model
-from src.models.compare import (
+from src.modeling.model_specs import get_baseline_model_specs, get_tuned_model_specs, get_best_model_specs
+from src.modeling.train import train_model
+from src.modeling.compare import (
     compare_models,
     compare_models_with_pr_optimal_threshold,
     compare_models_with_target_recall,
 )
-
 
 TO_TEST = [
     "raw_baseline",
@@ -29,12 +28,21 @@ TO_TEST = [
     "fe_full_robust",
 ]
 
+TO_TEST = [
+    "fe_compact",
+    "fe_compact_minus_fn",
+    "fe_compact_minus_flags",
+    "fe_compact_minus_buckets",
+    "fe_compact_plus_cat_driven",
+    "fe_compact_plus_risk",
+]
+
 
 def prepare_dataset(
     data_path: Path,
     feature_set_name: str,
     test_size: float = 0.2,
-    seed: int = 51,
+    seed: int = 51
 ):
     df = pd.read_csv(data_path)
     df = df.drop(columns=DROP_COLUMNS, errors="ignore").copy()
@@ -188,13 +196,24 @@ def run_one_feature_set(
     preprocessor = prepared["preprocessor"]
 
     print(" Building model specs...")
-    baseline_specs = get_baseline_model_specs(
-        preprocessor=preprocessor,
-        cat_features=cat_features,
-        seed=seed,
-    )
+#    baseline_specs = get_baseline_model_specs(
+#        preprocessor=preprocessor,
+#        cat_features=cat_features,
+#        seed=seed,
+#    )
 
-    tuned_specs = get_tuned_model_specs(
+#    tuned_specs = get_tuned_model_specs(
+#        preprocessor=preprocessor,
+#        cat_features=cat_features,
+#        X_train=X_train,
+#        y_train=y_train,
+#        seed=seed,
+#        scoring=scoring_metric,
+#    )
+
+#    model_specs = {**baseline_specs, **tuned_specs}
+
+    best_specs = get_best_model_specs(
         preprocessor=preprocessor,
         cat_features=cat_features,
         X_train=X_train,
@@ -203,7 +222,7 @@ def run_one_feature_set(
         scoring=scoring_metric,
     )
 
-    model_specs = {**baseline_specs, **tuned_specs}
+    model_specs = {**best_specs}
 
     print(" Training models...")
     trained_models = train_all_models(
@@ -235,7 +254,7 @@ def run_one_feature_set(
         trained_models=trained_models,
         X_test=X_test,
         y_test=y_test,
-        target_recall=target_recall,
+        target_recall=0.9,
         sort_by="precision_1",
     )
 

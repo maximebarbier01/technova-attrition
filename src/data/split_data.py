@@ -130,3 +130,49 @@ def make_train_test_split(
         random_state=random_state,
         stratify=stratify,
     )
+
+def make_train_val_test_split(
+    df: pd.DataFrame,
+    feature_columns: list[str],
+    target_column: str,
+    test_size: float = 0.2,
+    val_size: float = 0.2,
+    random_state: int = 42,
+    stratify: bool = True,
+):
+    """
+    Split en train / validation / test.
+
+    val_size est exprimé sur le dataset total.
+    Exemple :
+    - test_size=0.2
+    - val_size=0.2
+    => 60% train / 20% val / 20% test
+    """
+    X = df[feature_columns].copy()
+    y = df[target_column].copy()
+
+    stratify_y = y if stratify else None
+
+    X_train_full, X_test, y_train_full, y_test = train_test_split(
+        X,
+        y,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=stratify_y,
+    )
+
+    # proportion de validation à prendre dans le bloc train_full
+    val_relative_size = val_size / (1 - test_size)
+
+    stratify_train_full = y_train_full if stratify else None
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_train_full,
+        y_train_full,
+        test_size=val_relative_size,
+        random_state=random_state,
+        stratify=stratify_train_full,
+    )
+
+    return X_train, X_val, X_test, y_train, y_val, y_test

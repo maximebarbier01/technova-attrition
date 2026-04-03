@@ -41,7 +41,7 @@ RAW_CAT_FEATURES = [
 ]
 
 #* =========================================================
-#* FEATURE ENGINEERING
+#* BLOC DE BASE
 #* =========================================================
 
 # Catégorielles créées
@@ -87,6 +87,59 @@ FE_NUM_CAT_DRIVEN = [
     "consulting_travel_risk",
 ]
 
+
+#* =========================================================
+#* BLOCS POUR ABLATION A PARTIR DE fe_compact
+#* =========================================================
+
+FE_COMPACT_NUM_BASE = [
+    "age",
+    "revenu_mensuel",
+    "annee_experience_totale",
+    "annees_dans_l_entreprise",
+    "annees_dans_le_poste_actuel",
+    "annees_depuis_la_derniere_promotion",
+    "distance_domicile_travail",
+    "satisfaction_global",
+    "note_evaluation_precedente",
+    "note_evaluation_actuelle",
+    "niveau_hierarchique_poste",
+]
+
+FE_COMPACT_NUM_ENGINEERED = [
+    "salary_vs_level",
+    "experience_mismatch",
+    "promotion_speed",
+    "promotion_delay",
+    "delta_evaluation",
+]
+
+FE_COMPACT_NUM_FLAGS = [
+    "is_low_salary_for_job",
+    "stagnation_flag",
+    "long_commute",
+    "mid_level",
+]
+
+FE_COMPACT_NUM_FN = [
+    "career_frustration",
+    "fn_risk_profile",
+]
+
+FE_COMPACT_CAT_BASE = [
+    "statut_marital",
+    "departement",
+    "poste",
+    "niveau_education",
+    "domaine_etude",
+    "frequence_deplacement",
+]
+
+FE_COMPACT_CAT_BUCKETS = [
+    "age_bucket",
+    "revenu_bin",
+]
+
 #* =========================================================
 #* FEATURE SETS
 #* =========================================================
@@ -124,40 +177,69 @@ FEATURE_SETS = {
     #? peu de bruit, peu de redondance
     #? -----------------------------------------------------
     "fe_compact": {
-        "num": [
-            "age",
-            "revenu_mensuel",
-            "annee_experience_totale",
-            "annees_dans_l_entreprise",
-            "annees_dans_le_poste_actuel",
-            "annees_depuis_la_derniere_promotion",
-            "distance_domicile_travail",
-            "satisfaction_global",
-            "note_evaluation_precedente",
-            "note_evaluation_actuelle",
-            "niveau_hierarchique_poste",
-            "salary_vs_level",
-            "experience_mismatch",
-            "promotion_speed",
-            "promotion_delay",
-            "delta_evaluation",
-            "is_low_salary_for_job",
-            "stagnation_flag",
-            "long_commute",
-            "mid_level",
-            "career_frustration",
-            "fn_risk_profile",
-        ],
-        "cat": [
-            "statut_marital",
-            "departement",
-            "poste",
-            "niveau_education",
-            "domaine_etude",
-            "frequence_deplacement",
-            "age_bucket",
-            "revenu_bin",
-        ],
+        "num": (
+            FE_COMPACT_NUM_BASE
+            + FE_COMPACT_NUM_ENGINEERED
+            + FE_COMPACT_NUM_FLAGS
+            + FE_COMPACT_NUM_FN
+        ),
+        "cat": FE_COMPACT_CAT_BASE + FE_COMPACT_CAT_BUCKETS,
+    },
+    "fe_compact_minus_fn": {
+        "num": (
+            FE_COMPACT_NUM_BASE
+            + FE_COMPACT_NUM_ENGINEERED
+            + FE_COMPACT_NUM_FLAGS
+        ),
+        "cat": FE_COMPACT_CAT_BASE + FE_COMPACT_CAT_BUCKETS,
+    },
+    "fe_compact_minus_flags": {
+        "num": (
+            FE_COMPACT_NUM_BASE
+            + FE_COMPACT_NUM_ENGINEERED
+            + FE_COMPACT_NUM_FN
+        ),
+        "cat": FE_COMPACT_CAT_BASE + FE_COMPACT_CAT_BUCKETS,
+    },
+    "fe_compact_minus_buckets": {
+        "num": (
+            FE_COMPACT_NUM_BASE
+            + FE_COMPACT_NUM_ENGINEERED
+            + FE_COMPACT_NUM_FLAGS
+            + FE_COMPACT_NUM_FN
+        ),
+        "cat": FE_COMPACT_CAT_BASE,
+    },
+    "fe_compact_minus_engineered": {
+        "num": (
+            FE_COMPACT_NUM_BASE
+            + FE_COMPACT_NUM_FLAGS
+            + FE_COMPACT_NUM_FN
+        ),
+        "cat": FE_COMPACT_CAT_BASE + FE_COMPACT_CAT_BUCKETS,
+    },
+    "fe_compact_plus_cat_driven": {
+        "num": (
+            FE_COMPACT_NUM_BASE
+            + FE_COMPACT_NUM_ENGINEERED
+            + FE_COMPACT_NUM_FLAGS
+            + FE_COMPACT_NUM_FN
+            + FE_NUM_CAT_DRIVEN
+        ),
+        "cat": FE_COMPACT_CAT_BASE + FE_COMPACT_CAT_BUCKETS,
+    },
+    "fe_compact_plus_risk": {
+        "num": (
+            FE_COMPACT_NUM_BASE
+            + FE_COMPACT_NUM_ENGINEERED
+            + FE_COMPACT_NUM_FLAGS
+            + FE_COMPACT_NUM_FN
+            + [
+                "grey_zone_employee",
+                "underpaid_senior",
+            ]
+        ),
+        "cat": FE_COMPACT_CAT_BASE + FE_COMPACT_CAT_BUCKETS,
     },
 
     #? -----------------------------------------------------
