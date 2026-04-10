@@ -24,7 +24,6 @@ data/interim/
 
 # Outputs
 outputs/
-models/
 
 # Logs
 *.log
