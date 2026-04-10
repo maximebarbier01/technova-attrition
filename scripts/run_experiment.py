@@ -35,7 +35,7 @@ TO_TEST = [
     "fe_full_robust",
 ]
 
-# Choix du bloc de specs à lancer
+# Choix du bloc de specs ? lancer
 # Valeurs possibles :
 # - "baseline"
 # - "tuned"
@@ -267,6 +267,11 @@ def build_final_results_dataframe(
     df3 = df3.rename(columns={"best_threshold": "threshold"})
     df4 = df4.rename(columns={"best_threshold": "threshold"})
 
+    if "model" in df3.columns:
+        df3 = df3[df3["model"] != "dummy"].copy()
+    if "model" in df4.columns:
+        df4 = df4[df4["model"] != "dummy"].copy()
+
     df1["strategie_seuil"] = "seuil_0_5"
     df3["strategie_seuil"] = "seuil_cv_opt_prc"
     df4["strategie_seuil"] = f"cv_recall_cible_{target_recall}"
@@ -400,14 +405,23 @@ def run_one_feature_set(
             baseline_cv_summary["feature_set"] = feature_set_name
             baseline_cv_summary["spec_mode"] = spec_mode
 
-    print(f" Estimating thresholds with {cv_folds}-fold OOF probabilities...")
-    oof_proba_by_model = get_oof_predicted_proba_by_model_specs(
-        model_specs=model_specs,
-        X=X_train,
-        y=y_train,
-        cv=cv_folds,
-        random_state=seed,
-    )
+    threshold_model_specs = {
+        model_name: spec
+        for model_name, spec in model_specs.items()
+        if model_name != "dummy"
+    }
+
+    if threshold_model_specs:
+        print(f" Estimating thresholds with {cv_folds}-fold OOF probabilities...")
+        oof_proba_by_model = get_oof_predicted_proba_by_model_specs(
+            model_specs=threshold_model_specs,
+            X=X_train,
+            y=y_train,
+            cv=cv_folds,
+            random_state=seed,
+        )
+    else:
+        oof_proba_by_model = {}
 
     print(" Training models on full train set...")
     trained_models = train_all_models(
@@ -427,38 +441,43 @@ def run_one_feature_set(
         y_train=y_train,
     )
 
-    print(" Comparing models with CV PR-optimized threshold...")
-    results_pr = compare_models_with_cv_pr_optimal_threshold(
-        trained_models=trained_models,
-        X_train=X_train,
-        y_train=y_train,
-        X_test=X_test,
-        y_test=y_test,
-        metric="f1",
-        sort_by="f1_1",
-        oof_proba_by_model=oof_proba_by_model,
-        cv=cv_folds,
-        random_state=seed,
-    )
+    threshold_trained_models = {
+        model_name: model
+        for model_name, model in trained_models.items()
+        if model_name != "dummy"
+    }
 
-    print(f" Comparing models with CV target recall = {target_recall}...")
-    results_recall = compare_models_with_cv_target_recall(
-        trained_models=trained_models,
-        X_train=X_train,
-        y_train=y_train,
-    )
+    if threshold_trained_models:
+        print(" Comparing models with CV PR-optimized threshold...")
+        results_pr = compare_models_with_cv_pr_optimal_threshold(
+            trained_models=threshold_trained_models,
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            metric="f1",
+            sort_by="f1_1",
+            oof_proba_by_model=oof_proba_by_model,
+            cv=cv_folds,
+            random_state=seed,
+        )
 
-    print(f" Comparing models with target recall = {target_recall}...")
-    results_recall = compare_models_with_target_recall(
-        trained_models=trained_models,
-        X_test=X_test,
-        y_test=y_test,
-        target_recall=target_recall,
-        sort_by="precision_1",
-        oof_proba_by_model=oof_proba_by_model,
-        cv=cv_folds,
-        random_state=seed,
-    )
+        print(f" Comparing models with CV target recall = {target_recall}...")
+        results_recall = compare_models_with_cv_target_recall(
+            trained_models=threshold_trained_models,
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            target_recall=target_recall,
+            sort_by="precision_1",
+            oof_proba_by_model=oof_proba_by_model,
+            cv=cv_folds,
+            random_state=seed,
+        )
+    else:
+        results_pr = pd.DataFrame()
+        results_recall = pd.DataFrame()
 
     final_df = build_final_results_dataframe(
         results_05=results_05,
@@ -476,7 +495,7 @@ def run_one_feature_set(
 def build_best_summary(all_results: pd.DataFrame) -> pd.DataFrame:
     summary = (
         all_results.sort_values(
-            ["feature_set", "f1_1", "prc_auc"],
+            ["feature_set", "prc_auc", "f1_1"],
             ascending=[True, False, False],
         )
         .groupby("feature_set", as_index=False)
@@ -491,6 +510,7 @@ def main():
     test_size = 0.2
     scoring_metric = "average_precision"
     target_recall = 0.9
+    cv_folds = 5
 
     data_path = PROJECT_ROOT / "data" / "interim" / "data_eda.csv"
     output_dir = PROJECT_ROOT / "data" / "processed"
@@ -502,6 +522,7 @@ def main():
     print(f"SPEC_MODE      : {SPEC_MODE}")
     print(f"SCORING_METRIC : {scoring_metric}")
     print(f"TARGET_RECALL  : {target_recall}")
+    print(f"CV_FOLDS       : {cv_folds}")
     print(f"FEATURE SETS   : {TO_TEST}")
     print()
 
@@ -514,6 +535,7 @@ def main():
             scoring_metric=scoring_metric,
             target_recall=target_recall,
             spec_mode=SPEC_MODE,
+            cv_folds=cv_folds,
         )
         all_feature_set_results.append(result_df)
         if not baseline_cv_summary.empty:
@@ -531,7 +553,10 @@ def main():
 
     if not baseline_cv_summary.empty:
         print("\n=== TOP BASELINE CV RESULTS ===")
-        top_cv = baseline_cv_summary.sort_values(
+        top_cv_source = baseline_cv_summary[baseline_cv_summary["model"] != "dummy"].copy()
+        if top_cv_source.empty:
+            top_cv_source = baseline_cv_summary.copy()
+        top_cv = top_cv_source.sort_values(
             "valid_prc_auc_mean",
             ascending=False,
         ).head(10)

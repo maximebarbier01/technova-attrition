@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.base import clone
 from sklearn.metrics import (
     accuracy_score,
-    auc,
+    average_precision_score,
     confusion_matrix,
     f1_score,
     precision_recall_curve,
@@ -41,8 +41,9 @@ def _safe_prc_auc(y_true, y_proba):
     if len(np.unique(y_true)) < 2:
         return np.nan
 
-    precision_curve, recall_curve, _ = precision_recall_curve(y_true, y_proba)
-    return auc(recall_curve, precision_curve)
+    # Keep the historical column name `prc_auc`, but align its value with
+    # the project's tuning metric: sklearn average_precision.
+    return average_precision_score(y_true, y_proba)
 
 
 def _get_threshold_independent_metrics_from_proba(y_true, y_proba) -> dict:

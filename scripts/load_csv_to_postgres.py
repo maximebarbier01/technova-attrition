@@ -5,6 +5,7 @@ import re
 
 import pandas as pd
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import URL
 
 
 # *=============================================================================
@@ -109,9 +110,13 @@ def load_one_csv(
 # =============================================================================
 
 def main() -> None:
-    connection_url = (
-        f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}"
-        f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    connection_url = URL.create(
+        drivername="postgresql+psycopg2",
+        username=DB_USER,
+        password=DB_PASSWORD,
+        host=DB_HOST,
+        port=DB_PORT,
+        database=DB_NAME,
     )
 
     engine = create_engine(connection_url)
@@ -125,7 +130,7 @@ def main() -> None:
             file_path=file_path,
             table_name=table_name,
             schema="raw",
-            if_exists="replace",   # ou "fail" si tu veux éviter d'écraser
+            if_exists="replace",
             sep=",",
             encoding="utf-8",
         )
