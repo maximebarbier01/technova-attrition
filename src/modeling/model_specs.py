@@ -313,10 +313,10 @@ def get_baseline_model_specs(preprocessor, cat_features, seed=42):
                 preprocessor, random_state=seed, sampling_method="smote_under"
             ),
             "fit_kwargs": {},
-            "already_trained": False,
-            "family": "boosting_lgbm",
-            "sampling_method": "smote_under",
-        },
+           "already_trained": False,
+           "family": "boosting_lgbm",
+           "sampling_method": "smote_under",
+       },
 
         # KNN
         "knn_baseline": {
@@ -500,17 +500,17 @@ def get_tuned_model_specs(
 
     # ===== LightGBM =====
     random_lgbm = train_model_with_randomized_search(
-        model=build_lightgbm_pipeline(
-            preprocessor, random_state=seed, sampling_method="borderline"
-        ),
-        X_train=X_train,
-        y_train=y_train,
-        param_distributions=get_lightgbm_param_distributions(),
-        n_iter=20,
-        scoring=scoring,
-        random_state=seed,
-        n_jobs=-1,
-    )
+       model=build_lightgbm_pipeline(
+           preprocessor, random_state=seed, sampling_method="borderline"
+       ),
+       X_train=X_train,
+       y_train=y_train,
+       param_distributions=get_lightgbm_param_distributions(),
+       n_iter=20,
+       scoring=scoring,
+       random_state=seed,
+       n_jobs=-1,
+   )
 
     # ===== KNN =====
     random_knn = train_model_with_randomized_search(

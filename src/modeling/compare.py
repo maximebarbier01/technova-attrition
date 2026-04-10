@@ -19,12 +19,14 @@ from sklearn.model_selection import StratifiedKFold
 
 
 def _slice_like(data, indices):
+    """Découper des données Pandas ou NumPy à l'aide de la même fonction d'aide"""
     if hasattr(data, "iloc"):
         return data.iloc[indices]
     return data[indices]
 
 
 def _clone_model(model):
+    """Clonez un modèle en toute sécurité, avec une solution de secours par copie profonde pour les estimateurs que sklearn a du mal à cloner"""
     try:
         return clone(model)
     except RuntimeError:
@@ -32,12 +34,14 @@ def _clone_model(model):
 
 
 def _safe_roc_auc(y_true, y_proba):
+    """Ne calculez l'AUC de la courbe ROC que lorsque les deux classes sont présentes"""
     if len(np.unique(y_true)) < 2:
         return np.nan
     return roc_auc_score(y_true, y_proba)
 
 
 def _safe_prc_auc(y_true, y_proba):
+    """Calculez l'indicateur PR du projet à l'aide de la précision moyenne de sklearn lorsque les deux classes sont présentes."""
     if len(np.unique(y_true)) < 2:
         return np.nan
 
@@ -47,6 +51,7 @@ def _safe_prc_auc(y_true, y_proba):
 
 
 def _get_threshold_independent_metrics_from_proba(y_true, y_proba) -> dict:
+    """Fournir des indicateurs basés uniquement sur des probabilités, sans appliquer de seuil de classification."""
     return {
         "roc_auc": _safe_roc_auc(y_true, y_proba),
         "prc_auc": _safe_prc_auc(y_true, y_proba),
@@ -54,6 +59,7 @@ def _get_threshold_independent_metrics_from_proba(y_true, y_proba) -> dict:
 
 
 def _prefix_metrics(metrics: dict, prefix: str) -> dict:
+    """Ajouter un préfixe aux noms des métriques pour distinguer les résultats du train de données de ceux de la validation/du test"""
     return {f"{prefix}{key}": value for key, value in metrics.items()}
 
 
@@ -64,6 +70,8 @@ def _attach_train_metrics(
     y_train,
     threshold: float,
 ) -> dict:
+    """Ajoutez les métriques de l'ensemble d'entraînement à un dictionnaire de résultats existant 
+    en utilisant le même seuil que celui de la partition d'évaluation"""
     if X_train is None or y_train is None:
         return metrics
 
@@ -85,6 +93,7 @@ def _build_threshold_unavailable_result(
     X_train=None,
     y_train=None,
 ) -> dict:
+    """Définir un résultat de secours lorsqu'aucun seuil ne satisfait la règle demandée, tout en conservant les métriques sans seuil"""
     y_test_proba = model.predict_proba(X_test)[:, 1]
 
     result = {
@@ -121,6 +130,8 @@ def _build_threshold_unavailable_result(
 
 
 def evaluate_binary_classifier(model, X_eval, y_eval, threshold=0.5) -> dict:
+    """Évaluer un classificateur binaire sur un ensemble de données avec un seuil fixe 
+    et renvoyer les principaux indicateurs de classification."""
     y_proba = model.predict_proba(X_eval)[:, 1]
     y_pred = (y_proba >= threshold).astype(int)
 
@@ -141,6 +152,10 @@ def evaluate_binary_classifier(model, X_eval, y_eval, threshold=0.5) -> dict:
 
 
 def find_best_threshold(model, X_eval, y_eval, metric="f1"):
+    """Rechercher le seuil optimal directement sur un ensemble d'évaluation donné pour un indicateur choisi.
+
+    Cette méthode est simple mais moins rigoureuse que l'approche CV/OOF, car le même ensemble est utilisé à la fois pour choisir le seuil et pour évaluer les performances.
+    """
     y_proba = model.predict_proba(X_eval)[:, 1]
 
     best_thresh = 0.5
@@ -166,6 +181,8 @@ def find_best_threshold(model, X_eval, y_eval, metric="f1"):
 
 
 def get_precision_recall_thresholds_from_proba(y_true, y_proba) -> pd.DataFrame:
+    """Créez un tableau de données contenant les valeurs de seuil, de précision, 
+    de rappel et de F1 à partir des probabilités prédites."""
     precision, recall, thresholds = precision_recall_curve(y_true, y_proba)
 
     precision = precision[:-1]
@@ -183,11 +200,13 @@ def get_precision_recall_thresholds_from_proba(y_true, y_proba) -> pd.DataFrame:
 
 
 def get_precision_recall_thresholds(model, X_eval, y_eval) -> pd.DataFrame:
+    """Enveloppe pratique qui calcule le tableau des seuils de précision-rappel à partir d'un modèle ajusté."""
     y_proba = model.predict_proba(X_eval)[:, 1]
     return get_precision_recall_thresholds_from_proba(y_true=y_eval, y_proba=y_proba)
 
 
 def find_best_threshold_from_pr_curve(model, X_eval, y_eval, metric="f1") -> dict:
+    """Choisissez le meilleur seuil à partir de la courbe précision-rappel d'un ensemble d'évaluation"""
     pr_df = get_precision_recall_thresholds(model, X_eval, y_eval)
 
     if metric not in pr_df.columns:
@@ -205,6 +224,7 @@ def find_best_threshold_from_pr_curve(model, X_eval, y_eval, metric="f1") -> dic
 
 
 def find_threshold_for_target_recall(model, X_eval, y_eval, target_recall=0.80):
+    """Trouvez un seuil sur un ensemble d'évaluation qui atteigne au moins le taux de rappel requis."""
     y_proba = model.predict_proba(X_eval)[:, 1]
     return find_threshold_for_target_recall_from_proba(
         y_true=y_eval,
@@ -218,6 +238,7 @@ def find_best_threshold_from_proba(
     y_proba,
     metric="f1",
 ) -> dict:
+    """Choisissez le meilleur seuil parmi les probabilités précalculées plutôt que de réajuster le modèle."""
     pr_df = get_precision_recall_thresholds_from_proba(y_true=y_true, y_proba=y_proba)
 
     if metric not in pr_df.columns:
@@ -239,6 +260,7 @@ def find_threshold_for_target_recall_from_proba(
     y_proba,
     target_recall=0.80,
 ):
+    """Choisissez le seuil le plus élevé pour lequel le taux de rappel reste supérieur à la valeur cible demandée."""
     pr_df = get_precision_recall_thresholds_from_proba(y_true=y_true, y_proba=y_proba)
     candidates = pr_df[pr_df["recall"] >= target_recall].copy()
 
@@ -263,6 +285,12 @@ def get_oof_predicted_proba(
     cv: int = 5,
     random_state: int = 42,
 ) -> np.ndarray:
+    """
+    Cette fonction coupe x, y en CV folds stratifiés 
+    Pour chaque folds, elle entraîne une copie sur la partie train
+    Elle prédit ensuite les probabilités sur la partie de validation
+    Et enfin, range ces probabilités à leur place d’origine dans un vecteur final oof_proba
+    """
     fit_kwargs = {} if fit_kwargs is None else dict(fit_kwargs)
 
     skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=random_state)
@@ -291,6 +319,9 @@ def get_oof_predicted_proba_by_model_specs(
     cv: int = 5,
     random_state: int = 42,
 ) -> dict[str, np.ndarray]:
+    """ 
+    wrapper multi-modèles autour de la fonction get_oof_predicted_proba_by_model_specs
+    """
     return {
         model_name: get_oof_predicted_proba(
             model=spec["model"],
@@ -303,6 +334,9 @@ def get_oof_predicted_proba_by_model_specs(
         for model_name, spec in model_specs.items()
     }
 
+#* ===============================================
+#* COMPARATEUR CLASSIQUE
+#* ===============================================
 
 def compare_models(
     trained_models,
@@ -313,6 +347,7 @@ def compare_models(
     X_train=None,
     y_train=None,
 ):
+    """Comparez les modèles entraînés sur l'ensemble de test en utilisant un seuil fixe, généralement 0,5."""
     results = []
 
     for model_name, model in trained_models.items():
@@ -353,6 +388,10 @@ def compare_models_with_optimal_threshold(
     X_train=None,
     y_train=None,
 ):
+    """Compare models after choosing the best threshold directly on the test set.
+
+    This function is kept for reference, but the CV/OOF variants below are methodologically cleaner.
+    """
     results = []
 
     for model_name, model in trained_models.items():
@@ -402,6 +441,10 @@ def compare_models_with_pr_optimal_threshold(
     X_train=None,
     y_train=None,
 ):
+    """Compare models after choosing a threshold from the test-set precision-recall curve.
+
+    Like compare_models_with_optimal_threshold, this is less rigorous than the CV/OOF approach.
+    """
     results = []
 
     for model_name, model in trained_models.items():
@@ -453,6 +496,10 @@ def compare_models_with_target_recall(
     X_train=None,
     y_train=None,
 ):
+    """Comparez les modèles après avoir déterminé, sur l'ensemble de test, le seuil permettant d'atteindre un taux de rappel cible.
+
+    Cette version est également conservée principalement à des fins de comparaison avec le nouveau workflow basé sur l'évaluation croisée.
+    """
     results = []
 
     for model_name, model in trained_models.items():
@@ -505,6 +552,9 @@ def compare_models_with_target_recall(
 
     return results_df.reset_index(drop=True)
 
+#* ===============================================
+#* COMPARATEURS AVEC CV 
+#* ===============================================
 
 def compare_models_with_cv_pr_optimal_threshold(
     trained_models,
@@ -519,6 +569,10 @@ def compare_models_with_cv_pr_optimal_threshold(
     cv: int = 5,
     random_state: int = 42,
 ):
+    """Comparez les modèles après avoir déterminé le seuil à partir des probabilités OOF sur le jeu d'entraînement (train) et l'avoir appliqué une seule fois sur le jeu de test.
+
+    Il s'agit de la méthode recommandée lorsque vous souhaitez obtenir un seuil basé sur les données sans divulguer d'informations sur le jeu de test.
+    """
     if oof_proba_by_model is None:
         if model_specs is None:
             raise ValueError("model_specs est requis si oof_proba_by_model n'est pas fourni.")
@@ -587,6 +641,7 @@ def compare_models_with_cv_target_recall(
     cv: int = 5,
     random_state: int = 42,
 ):
+    """Comparez les modèles après avoir déterminé, lors de l'entraînement, le seuil de probabilités OOF qui permet d'atteindre le taux de rappel souhaité."""
     if oof_proba_by_model is None:
         if model_specs is None:
             raise ValueError("model_specs est requis si oof_proba_by_model n'est pas fourni.")
@@ -664,6 +719,9 @@ def cross_validate_model_specs(
     threshold: float = 0.5,
     random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Exécute une boucle de validation croisée standard sur toutes les spécifications du modèle et renvoie à la fois les résultats par pli et les résultats récapitulatifs.
+       Contrairement aux fonctions d'aide OOF, cette fonction sert principalement à évaluer le comportement de référence et à vérifier la stabilité de l'entraînement et de la validation à un seuil fixe.
+    """
     skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=random_state)
     y_array = np.asarray(y)
     fold_rows = []

@@ -110,10 +110,21 @@ def build_xgboost_pipeline(
     reg_lambda: float = 1.0,
     scale_pos_weight: float = 1.0,
     n_jobs: int = -1,
+    use_gpu: bool = True,
 ) -> ImbPipeline:
     """
     Construit un pipeline XGBoost avec ou sans sampling.
+
+    Parameters
+    ----------
+    use_gpu : bool, default=False
+        Si True, active l'entrainement GPU via CUDA. Sinon, utilise le CPU.
     """
+    xgb_device_params = {
+        "tree_method": "hist",
+        "device": "cuda",
+    } if use_gpu else {}
+
     model = XGBClassifier(
         n_estimators=n_estimators,
         max_depth=max_depth,
@@ -128,6 +139,7 @@ def build_xgboost_pipeline(
         eval_metric="logloss",
         random_state=random_state,
         n_jobs=n_jobs,
+        **xgb_device_params,
     )
 
     steps = [("prep", preprocessor)]
@@ -189,6 +201,7 @@ def optimize_xgboost_with_optuna(
     optimize_metric: str = "average_precision",
     f1_threshold: float = 0.5,
     n_jobs: int = -1,
+    use_gpu: bool = False,
 ) -> tuple[ImbPipeline, optuna.study.Study]:
     allowed_metrics = {"average_precision", "f1"}
     if optimize_metric not in allowed_metrics:
@@ -254,6 +267,7 @@ def optimize_xgboost_with_optuna(
                 reg_lambda=params["reg_lambda"],
                 scale_pos_weight=params["scale_pos_weight"],
                 n_jobs=n_jobs,
+                use_gpu=use_gpu,
             )
 
             pipeline.fit(X_train, y_train)
@@ -300,6 +314,7 @@ def optimize_xgboost_with_optuna(
         reg_lambda=best_params["reg_lambda"],
         scale_pos_weight=scale_pos_weight,
         n_jobs=n_jobs,
+        use_gpu=use_gpu,
     )
 
     best_pipeline.fit(X_data, y_data)

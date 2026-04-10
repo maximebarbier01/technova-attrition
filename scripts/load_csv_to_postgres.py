@@ -22,9 +22,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 FILES = {
-    "extrait_eval": DATA_DIR / "extrait_eval.csv",
-    "extrait_sirh": DATA_DIR / "extrait_sirh.csv",
-    "extrait_sondage": DATA_DIR / "extrait_sondage.csv",
+    "extrait_eval": DATA_DIR / "/home/maxime/projects/technova-attrition/data/raw/extrait_eval.csv",
+    "extrait_sirh": DATA_DIR / "/home/maxime/projects/technova-attrition/data/raw/extrait_sirh.csv.csv",
+    "extrait_sondage": DATA_DIR / "/home/maxime/projects/technova-attrition/data/raw/extrait_sondage.csv",
 }
 
 

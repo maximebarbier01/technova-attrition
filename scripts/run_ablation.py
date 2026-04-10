@@ -103,7 +103,7 @@ def xgb_builder(preprocessor, seed):
 
 
 def main() -> None:
-    seed = 51
+    seed = 42
     df = prepare_dataframe(DATA_PATH)
 
     ablation_results = run_ablation_study(
