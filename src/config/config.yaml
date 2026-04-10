@@ -1,0 +1,36 @@
+project:
+  name: technova-attrition
+  target: a_quitte_l_entreprise
+  random_state: 42
+
+paths:
+  raw_dir: data/raw
+  interim_dir: data/interim
+  processed_dir: data/processed
+  reports_dir: reports
+  figures_dir: reports/figures
+
+data:
+  raw_files:
+    sirh: data/raw/extrait_sirh.csv.csv
+    sondage: data/raw/extrait_sondage.csv
+    eval: data/raw/extrait_eval.csv
+
+split:
+  test_size: 0.2
+  val_size: 0.2
+  stratify: true
+
+evaluation:
+  scoring_metric: average_precision
+  target_recall: 0.80
+  default_threshold: 0.5
+
+experiment:
+  feature_sets_to_test:
+    - raw_baseline
+    - fe_core
+    - fe_compact
+    - fe_fn_focus
+    - fe_full_robust
+  spec_mode: baseline+tuned

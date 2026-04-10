@@ -32,3 +32,8 @@ models/
 # OS
 .DS_Store
 Thumbs.db
+
+# Autres 
+*.py[cod]
+catboost_info/
+.ipynb_checkpoints/

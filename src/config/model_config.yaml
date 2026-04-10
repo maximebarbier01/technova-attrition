@@ -1,0 +1,47 @@
+models:
+  dummy:
+    enabled: true
+    family: baseline
+    sampling_method: null
+    params:
+      strategy: most_frequent
+
+  logistic_regression:
+    enabled: true
+    family: linear
+    variants:
+      - name: log_reg_baseline
+        sampling_method: null
+        params:
+          penalty: l2
+          C: 1.0
+          class_weight: balanced
+          max_iter: 2000
+      - name: log_reg_smote
+        sampling_method: smote
+        params:
+          penalty: l2
+          C: 1.0
+          class_weight: balanced
+          max_iter: 2000
+      - name: log_reg_borderline
+        sampling_method: borderline
+        params:
+          penalty: l2
+          C: 1.0
+          class_weight: balanced
+          max_iter: 2000
+
+  random_forest:
+    enabled: true
+    family: tree_ensemble
+
+  xgboost:
+    enabled: true
+    family: boosting
+
+  catboost:
+    enabled: true
+    family: boosting_cat
+    params:
+      auto_class_weights: Balanced

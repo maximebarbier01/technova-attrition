@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-# =========================================
-# Imports modèles
-# =========================================
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path.cwd().resolve().parents[1]
+sys.path.append(str(PROJECT_ROOT))
+
 from models.dummy_classifier_model import get_dummy_model
 
 from models.logistic_regression_model import (
@@ -21,11 +24,13 @@ from models.random_forest_model import (
 from models.xgboost_model import (
     build_xgboost_pipeline,
     get_xgboost_param_distributions,
+    optimize_xgboost_with_optuna,
 )
 
 from models.catboost_model import (
     build_catboost_model,
     get_catboost_param_distributions,
+    optimize_catboost_with_optuna,
 )
 
 from src.modeling.train import (
@@ -33,10 +38,31 @@ from src.modeling.train import (
     train_model_with_randomized_search,
 )
 
+
+def _infer_sampling_method_from_pipeline(model) -> str | None:
+    """
+    Infère la méthode de sampling à partir des étapes du pipeline.
+    """
+    if not hasattr(model, "named_steps"):
+        return None
+
+    step_names = set(model.named_steps.keys())
+
+    if "under" in step_names:
+        return "smote_under"
+
+    if "smote" in step_names:
+        sampler = model.named_steps["smote"].__class__.__name__.lower()
+        if "borderline" in sampler:
+            return "borderline"
+        return "smote"
+
+    return None
+
+
 # =========================================
 # BASELINE MODELS
 # =========================================
-
 def get_baseline_model_specs(preprocessor, cat_features, seed=42):
     return {
         "dummy": {
@@ -44,61 +70,191 @@ def get_baseline_model_specs(preprocessor, cat_features, seed=42):
             "fit_kwargs": {},
             "already_trained": False,
             "family": "baseline",
-            "use_smote": False,
+            "sampling_method": None,
         },
 
-        "log_reg": {
-            "model": build_logistic_regression_pipeline(preprocessor, random_state=seed, use_smote=True),
+        # Logistic Regression
+        "log_reg_baseline": {
+            "model": build_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method=None
+            ),
             "fit_kwargs": {},
             "already_trained": False,
             "family": "linear",
-            "use_smote": True,
+            "sampling_method": None,
+        },
+        "log_reg_smote": {
+            "model": build_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "linear",
+            "sampling_method": "smote",
+        },
+        "log_reg_borderline": {
+            "model": build_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method="borderline"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "linear",
+            "sampling_method": "borderline",
+        },
+        "log_reg_smote_under": {
+            "model": build_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote_under"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "linear",
+            "sampling_method": "smote_under",
         },
 
-        "lasso_log_reg": {
-            "model": build_lasso_logistic_regression_pipeline(preprocessor, random_state=seed, use_smote=True),
+        # Lasso Logistic Regression
+        "lasso_log_reg_baseline": {
+            "model": build_lasso_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method=None
+            ),
             "fit_kwargs": {},
             "already_trained": False,
             "family": "linear_l1",
-            "use_smote": True,
+            "sampling_method": None,
+        },
+        "lasso_log_reg_smote": {
+            "model": build_lasso_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "linear_l1",
+            "sampling_method": "smote",
+        },
+        "lasso_log_reg_borderline": {
+            "model": build_lasso_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method="borderline"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "linear_l1",
+            "sampling_method": "borderline",
+        },
+        "lasso_log_reg_smote_under": {
+            "model": build_lasso_logistic_regression_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote_under"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "linear_l1",
+            "sampling_method": "smote_under",
         },
 
-        "random_forest": {
-            "model": build_random_forest_pipeline(preprocessor, random_state=seed, use_smote=True),
+        # Random Forest
+        "random_forest_baseline": {
+            "model": build_random_forest_pipeline(
+                preprocessor, random_state=seed, sampling_method=None
+            ),
             "fit_kwargs": {},
             "already_trained": False,
             "family": "tree_ensemble",
-            "use_smote": True,
+            "sampling_method": None,
+        },
+        "random_forest_smote": {
+            "model": build_random_forest_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "tree_ensemble",
+            "sampling_method": "smote",
+        },
+        "random_forest_borderline": {
+            "model": build_random_forest_pipeline(
+                preprocessor, random_state=seed, sampling_method="borderline"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "tree_ensemble",
+            "sampling_method": "borderline",
+        },
+        "random_forest_smote_under": {
+            "model": build_random_forest_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote_under"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "tree_ensemble",
+            "sampling_method": "smote_under",
         },
 
-        "xgboost": {
-            "model": build_xgboost_pipeline(preprocessor, random_state=seed, use_smote=True),
+        # XGBoost
+        "xgboost_baseline": {
+            "model": build_xgboost_pipeline(
+                preprocessor, random_state=seed, sampling_method=None
+            ),
             "fit_kwargs": {},
             "already_trained": False,
             "family": "boosting",
-            "use_smote": True,
+            "sampling_method": None,
+        },
+        "xgboost_smote": {
+            "model": build_xgboost_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "boosting",
+            "sampling_method": "smote",
+        },
+        "xgboost_borderline": {
+            "model": build_xgboost_pipeline(
+                preprocessor, random_state=seed, sampling_method="borderline"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "boosting",
+            "sampling_method": "borderline",
+        },
+        "xgboost_smote_under": {
+            "model": build_xgboost_pipeline(
+                preprocessor, random_state=seed, sampling_method="smote_under"
+            ),
+            "fit_kwargs": {},
+            "already_trained": False,
+            "family": "boosting",
+            "sampling_method": "smote_under",
         },
 
+        # CatBoost
         "catboost": {
-            "model": build_catboost_model(random_state=seed),
+            "model": build_catboost_model(
+                random_state=seed,
+                auto_class_weights="Balanced",
+            ),
             "fit_kwargs": {"cat_features": cat_features},
             "already_trained": False,
             "family": "boosting_cat",
-            "use_smote": False,  # ⚠️ jamais avec CatBoost
+            "sampling_method": None,
         },
     }
 
 
 # =========================================
-# TUNED MODELS
+# TUNED MODELS - Grid / Random Search
 # =========================================
-
-def get_tuned_model_specs(preprocessor, cat_features, X_train, y_train, seed=42, scoring = "average_precision"):
-    scoring = scoring
-
-    #* ===== Logistic =====
+def get_tuned_model_specs(
+    preprocessor,
+    cat_features,
+    X_train,
+    y_train,
+    seed=42,
+    scoring="average_precision",
+):
+    # ===== Logistic =====
     grid_log = train_model_with_gridsearch(
-        model=build_logistic_regression_pipeline(preprocessor, random_state=seed, use_smote=True),
+        model=build_logistic_regression_pipeline(
+            preprocessor, random_state=seed, sampling_method="borderline"
+        ),
         X_train=X_train,
         y_train=y_train,
         param_grid=get_logistic_regression_param_grid(),
@@ -107,7 +263,9 @@ def get_tuned_model_specs(preprocessor, cat_features, X_train, y_train, seed=42,
     )
 
     random_log = train_model_with_randomized_search(
-        model=build_logistic_regression_pipeline(preprocessor, random_state=seed, use_smote=True),
+        model=build_logistic_regression_pipeline(
+            preprocessor, random_state=seed, sampling_method="borderline"
+        ),
         X_train=X_train,
         y_train=y_train,
         param_distributions=get_logistic_regression_param_distributions(),
@@ -117,9 +275,11 @@ def get_tuned_model_specs(preprocessor, cat_features, X_train, y_train, seed=42,
         n_jobs=-1,
     )
 
-    #* ===== Lasso =====
+    # ===== Lasso =====
     grid_lasso = train_model_with_gridsearch(
-        model=build_lasso_logistic_regression_pipeline(preprocessor, random_state=seed, use_smote=True),
+        model=build_lasso_logistic_regression_pipeline(
+            preprocessor, random_state=seed, sampling_method="borderline"
+        ),
         X_train=X_train,
         y_train=y_train,
         param_grid=get_lasso_logistic_regression_param_grid(),
@@ -127,9 +287,11 @@ def get_tuned_model_specs(preprocessor, cat_features, X_train, y_train, seed=42,
         n_jobs=-1,
     )
 
-    #* ===== Random Forest =====
+    # ===== Random Forest =====
     random_rf = train_model_with_randomized_search(
-        model=build_random_forest_pipeline(preprocessor, random_state=seed, use_smote=True),
+        model=build_random_forest_pipeline(
+            preprocessor, random_state=seed, sampling_method="borderline"
+        ),
         X_train=X_train,
         y_train=y_train,
         param_distributions=get_random_forest_param_distributions(),
@@ -139,9 +301,11 @@ def get_tuned_model_specs(preprocessor, cat_features, X_train, y_train, seed=42,
         n_jobs=-1,
     )
 
-    #* ===== XGBoost =====
+    # ===== XGBoost =====
     random_xgb = train_model_with_randomized_search(
-        model=build_xgboost_pipeline(preprocessor, random_state=seed, use_smote=True),
+        model=build_xgboost_pipeline(
+            preprocessor, random_state=seed, sampling_method="borderline"
+        ),
         X_train=X_train,
         y_train=y_train,
         param_distributions=get_xgboost_param_distributions(),
@@ -151,7 +315,7 @@ def get_tuned_model_specs(preprocessor, cat_features, X_train, y_train, seed=42,
         n_jobs=-1,
     )
 
-    #* ===== CatBoost =====
+    # ===== CatBoost =====
     random_cat = train_model_with_randomized_search(
         model=build_catboost_model(random_state=seed),
         X_train=X_train,
@@ -170,98 +334,97 @@ def get_tuned_model_specs(preprocessor, cat_features, X_train, y_train, seed=42,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "linear",
-            "use_smote": True,
+            "sampling_method": _infer_sampling_method_from_pipeline(grid_log.best_estimator_),
         },
-
         "best_log_reg_random": {
             "model": random_log.best_estimator_,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "linear",
-            "use_smote": True,
+            "sampling_method": _infer_sampling_method_from_pipeline(random_log.best_estimator_),
         },
-
         "best_lasso_log_reg": {
             "model": grid_lasso.best_estimator_,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "linear_l1",
-            "use_smote": True,
+            "sampling_method": _infer_sampling_method_from_pipeline(grid_lasso.best_estimator_),
         },
-
         "best_random_forest": {
             "model": random_rf.best_estimator_,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "tree_ensemble",
-            "use_smote": True,
+            "sampling_method": _infer_sampling_method_from_pipeline(random_rf.best_estimator_),
         },
-
         "best_xgboost": {
             "model": random_xgb.best_estimator_,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "boosting",
-            "use_smote": True,
+            "sampling_method": _infer_sampling_method_from_pipeline(random_xgb.best_estimator_),
         },
-
         "best_catboost": {
             "model": random_cat.best_estimator_,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "boosting_cat",
-            "use_smote": False,
+            "sampling_method": None,
         },
     }
 
 
-
 # =========================================
-# BEST MODEL
+# BEST MODELS - Optuna
 # =========================================
-
-def get_best_model_specs(preprocessor, cat_features, X_train, y_train, seed=42, scoring = "average_precision"):
-    scoring = scoring
-
-    #* ===== XGBoost =====
-    random_xgb = train_model_with_randomized_search(
-        model=build_xgboost_pipeline(preprocessor, random_state=seed, use_smote=True),
-        X_train=X_train,
-        y_train=y_train,
-        param_distributions=get_xgboost_param_distributions(),
-        n_iter=20,
-        scoring=scoring,
+def get_optuna_model_specs(
+    preprocessor,
+    cat_features,
+    X_train,
+    y_train,
+    seed=42,
+    scoring="average_precision",
+    n_trials=50,
+    cv=5,
+):
+    # ===== XGBoost =====
+    best_xgb_model, xgb_study = optimize_xgboost_with_optuna(
+        X=X_train,
+        y=y_train,
+        preprocessor=preprocessor,
+        n_trials=n_trials,
+        cv=cv,
         random_state=seed,
+        optimize_metric=scoring,
         n_jobs=-1,
     )
 
-    #* ===== CatBoost =====
-    random_cat = train_model_with_randomized_search(
-        model=build_catboost_model(random_state=seed),
-        X_train=X_train,
-        y_train=y_train,
-        param_distributions=get_catboost_param_distributions(),
-        n_iter=20,
-        scoring=scoring,
+    # ===== CatBoost =====
+    best_cat_model, cat_study = optimize_catboost_with_optuna(
+        X=X_train,
+        y=y_train,
+        cat_features=cat_features,
+        n_trials=n_trials,
+        cv=cv,
         random_state=seed,
-        n_jobs=-1,
-        fit_kwargs={"cat_features": cat_features},
+        optimize_metric=scoring,
     )
 
     return {
-        "best_xgboost": {
-            "model": random_xgb.best_estimator_,
+        "best_xgboost_optuna": {
+            "model": best_xgb_model,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "boosting",
-            "use_smote": True,
+            "sampling_method": _infer_sampling_method_from_pipeline(best_xgb_model),
+            "study": xgb_study,
         },
-
-        "best_catboost": {
-            "model": random_cat.best_estimator_,
+        "best_catboost_optuna": {
+            "model": best_cat_model,
             "fit_kwargs": {},
             "already_trained": True,
             "family": "boosting_cat",
-            "use_smote": False,
+            "sampling_method": None,
+            "study": cat_study,
         },
     }

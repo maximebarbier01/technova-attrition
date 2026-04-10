@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
@@ -134,6 +139,58 @@ def find_threshold_for_target_recall(model, X_test, y_test, target_recall=0.80):
         "f1": float(best_row["f1"]),
     }
 
+def find_best_threshold_from_proba(
+    y_true,
+    y_proba,
+    metric="f1",
+) -> dict:
+    """
+    Trouve le meilleur seuil à partir des probabilités prédites.
+
+    metric supportée :
+    - 'f1'
+    - 'precision'
+    - 'recall'
+    """
+    precision, recall, thresholds = precision_recall_curve(y_true, y_proba)
+
+    precision = precision[:-1]
+    recall = recall[:-1]
+
+    f1 = 2 * (precision * recall) / (precision + recall + 1e-12)
+
+    pr_df = pd.DataFrame({
+        "threshold": thresholds,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+    })
+
+    if metric not in pr_df.columns:
+        raise ValueError(f"Métrique non supportée : {metric}")
+
+    best_idx = pr_df[metric].idxmax()
+    best_row = pr_df.loc[best_idx]
+
+    return {
+        "best_threshold": float(best_row["threshold"]),
+        "best_precision": float(best_row["precision"]),
+        "best_recall": float(best_row["recall"]),
+        "best_f1": float(best_row["f1"]),
+    }
+
+    if metric not in pr_df.columns:
+        raise ValueError(f"Métrique non supportée : {metric}")
+
+    best_idx = pr_df[metric].idxmax()
+    best_row = pr_df.loc[best_idx]
+
+    return {
+        "best_threshold": float(best_row["threshold"]),
+        "best_precision": float(best_row["precision"]),
+        "best_recall": float(best_row["recall"]),
+        "best_f1": float(best_row["f1"]),
+    }
 
 def compare_models(trained_models, X_test, y_test, threshold=0.5, sort_by="roc_auc"):
     """

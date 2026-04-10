@@ -25,7 +25,7 @@ def get_categorical_pipeline() -> Pipeline:
     return Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore")),
+            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
         ]
     )
 
@@ -40,4 +40,5 @@ def build_preprocessor(
             ("cat", get_categorical_pipeline(), cat_features),
         ],
         remainder="drop",
+        verbose_feature_names_out=False,
     )
