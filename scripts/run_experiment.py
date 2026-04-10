@@ -35,7 +35,7 @@ TO_TEST = [
     "fe_full_robust",
 ]
 
-# Choix du bloc de specs ? lancer
+# Choix du bloc de specs à lancer
 # Valeurs possibles :
 # - "baseline"
 # - "tuned"
@@ -446,6 +446,11 @@ def run_one_feature_set(
         trained_models=trained_models,
         X_train=X_train,
         y_train=y_train,
+    )
+
+    print(f" Comparing models with target recall = {target_recall}...")
+    results_recall = compare_models_with_target_recall(
+        trained_models=trained_models,
         X_test=X_test,
         y_test=y_test,
         target_recall=target_recall,
@@ -471,7 +476,7 @@ def run_one_feature_set(
 def build_best_summary(all_results: pd.DataFrame) -> pd.DataFrame:
     summary = (
         all_results.sort_values(
-            ["feature_set", "prc_auc", "f1_1"],
+            ["feature_set", "f1_1", "prc_auc"],
             ascending=[True, False, False],
         )
         .groupby("feature_set", as_index=False)
@@ -486,7 +491,6 @@ def main():
     test_size = 0.2
     scoring_metric = "average_precision"
     target_recall = 0.9
-    cv_folds = 5
 
     data_path = PROJECT_ROOT / "data" / "interim" / "data_eda.csv"
     output_dir = PROJECT_ROOT / "data" / "processed"
@@ -498,7 +502,6 @@ def main():
     print(f"SPEC_MODE      : {SPEC_MODE}")
     print(f"SCORING_METRIC : {scoring_metric}")
     print(f"TARGET_RECALL  : {target_recall}")
-    print(f"CV_FOLDS       : {cv_folds}")
     print(f"FEATURE SETS   : {TO_TEST}")
     print()
 
@@ -511,7 +514,6 @@ def main():
             scoring_metric=scoring_metric,
             target_recall=target_recall,
             spec_mode=SPEC_MODE,
-            cv_folds=cv_folds,
         )
         all_feature_set_results.append(result_df)
         if not baseline_cv_summary.empty:
