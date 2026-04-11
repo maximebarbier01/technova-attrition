@@ -34,7 +34,7 @@ from src.modeling.train import (
 SEED = 51
 TEST_SIZE = 0.2
 SCORING_METRIC = "average_precision"
-TARGET_RECALL = 0.90
+TARGET_RECALL = 0.70
 CV_FOLDS = 5
 USE_XGBOOST_GPU = True
 XGBOOST_SEARCH_ITER = 45
