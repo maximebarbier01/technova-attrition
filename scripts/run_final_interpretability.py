@@ -21,6 +21,11 @@ from src.data.preprocessing import build_preprocessor, filter_existing_features
 from src.data.split_data import make_train_test_split
 from src.features.feature_engineering import make_feature_engineering
 from src.features.features_selection import DROP_COLUMNS, TARGET, get_feature_set
+from src.utils.visualization import (
+    plot_categorical_feature_diagnostics,
+    plot_numeric_feature_diagnostics,
+    plot_probability_distrib_per_pred_type,
+)
 
 SEED = 51
 TEST_SIZE = 0.2
@@ -38,6 +43,23 @@ FINAL_MODEL = {
         "max_iter": 5000,
     },
 }
+
+NUMERIC_DIAGNOSTIC_FEATURES = [
+    "satisfaction_global",
+    "promotion_delay",
+    "note_evaluation_precedente",
+    "role_stagnation_ratio",
+    "salary_gap_vs_poste_median",
+    "training_gap_vs_department_median",
+]
+
+CATEGORICAL_DIAGNOSTIC_FEATURES = [
+    "statut_marital",
+    "frequence_deplacement",
+    "departement",
+    "poste",
+    "revenu_bin",
+]
 
 
 def prepare_dataset(
@@ -386,12 +408,56 @@ def main() -> None:
         output_path = figures_dir / f"{DATE_TAG}-final_model_{case_name}_waterfall.png"
         save_local_waterfall_plot(explanation_row, output_path, title)
 
+
+    diagnostics_dir = figures_dir / "final_model_diagnostics"
+    probability_plot_path = diagnostics_dir / f"{DATE_TAG}-final_model_probability_by_pred_type.png"
+    numeric_diag_dir = diagnostics_dir / "numeric"
+    categorical_diag_dir = diagnostics_dir / "categorical"
+
+    plot_probability_distrib_per_pred_type(
+        model=model,
+        X=prepared["X_test"],
+        y=prepared["y_test"],
+        threshold=FINAL_MODEL["threshold"],
+        categories_to_exclude=["true_negative"],
+        save_path=probability_plot_path,
+        show=False,
+    )
+
+    numeric_diag_paths = plot_numeric_feature_diagnostics(
+        model=model,
+        X=prepared["X_test"],
+        y=prepared["y_test"],
+        num_features=NUMERIC_DIAGNOSTIC_FEATURES,
+        threshold=FINAL_MODEL["threshold"],
+        kind="kde",
+        output_dir=numeric_diag_dir,
+        filename_prefix=f"{DATE_TAG}-numeric_",
+        show=False,
+    )
+
+    categorical_diag_paths = plot_categorical_feature_diagnostics(
+        model=model,
+        X=prepared["X_test"],
+        y=prepared["y_test"],
+        cat_features=CATEGORICAL_DIAGNOSTIC_FEATURES,
+        threshold=FINAL_MODEL["threshold"],
+        normalize=True,
+        top_n=8,
+        output_dir=categorical_diag_dir,
+        filename_prefix=f"{DATE_TAG}-categorical_",
+        show=False,
+    )
+
     print("\n=== FINAL INTERPRETABILITY OUTPUTS ===")
     print(f"Permutation importance CSV : {permutation_csv_path}")
     print(f"Permutation importance PNG : {permutation_png_path}")
     print(f"SHAP global CSV            : {shap_global_csv_path}")
     print(f"SHAP beeswarm PNG          : {shap_global_png_path}")
     print(f"Local cases CSV            : {local_summary_csv_path}")
+    print(f"Probability diag PNG       : {probability_plot_path}")
+    print(f"Numeric diag PNG count     : {len(numeric_diag_paths)}")
+    print(f"Categorical diag PNG count : {len(categorical_diag_paths)}")
     print("\n=== SELECTED LOCAL CASES ===")
     print(local_summary_df.to_string(index=False))
     print("\n=== TOP PERMUTATION FEATURES ===")

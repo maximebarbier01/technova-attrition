@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import math
+from pathlib import Path
 
 
 def get_prediction_type(pred, target):
@@ -31,37 +32,28 @@ def plot_probability_distrib_per_pred_type(
     y,
     threshold=0.5,
     categories_to_exclude=["true_negative"],
+    save_path=None,
+    show=True,
 ):
     """
-    Affiche la distribution des probabilités par type de prédiction.
+    Affiche la distribution des probabilit?s par type de pr?diction.
     """
 
     if categories_to_exclude is None:
         categories_to_exclude = []
 
     df = X.copy()
-
-    # Probabilités
     df["probability_score"] = model.predict_proba(X)[:, 1]
-
-    # Prédictions
     df["prediction"] = (df["probability_score"] >= threshold).astype(int)
-
-    # Target
     df["target"] = y.values
-
-    # Type de prédiction
     df["prediction_type"] = df.apply(
         lambda row: get_prediction_type(row["prediction"], row["target"]),
         axis=1,
     )
 
-    # Filtrage
     df_filtered = df[~df["prediction_type"].isin(categories_to_exclude)]
 
-    # Plot
-    plt.figure(figsize=(8, 5))
-
+    fig, ax = plt.subplots(figsize=(8, 5))
     sns.histplot(
         data=df_filtered,
         x="probability_score",
@@ -71,14 +63,26 @@ def plot_probability_distrib_per_pred_type(
         palette=color_palette,
         stat="density",
         common_norm=False,
+        ax=ax,
     )
 
-    plt.title("Distribution des probabilités par type de prédiction")
-    plt.xlabel("Probability score")
-    plt.ylabel("Density")
-    plt.grid(alpha=0.3)
+    ax.set_title("Distribution des probabilit?s par type de pr?diction")
+    ax.set_xlabel("Probability score")
+    ax.set_ylabel("Density")
+    ax.grid(alpha=0.3)
+    plt.tight_layout()
 
-    plt.show()
+    if save_path is not None:
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=200, bbox_inches="tight")
+
+    if show:
+        plt.show()
+
+    plt.close(fig)
+    return df_filtered
+
 
 def plot_numeric_distributions_by_prediction_type(
     model,
@@ -169,31 +173,18 @@ def plot_numeric_feature_diagnostics(
     threshold=0.5,
     kind="kde",
     ncols=2,
+    output_dir=None,
+    filename_prefix="",
+    show=True,
 ):
     """
-    Pour chaque variable numérique, trace 2 graphiques :
-    1. distribution classe 1 vs classe 0 : on regarde si la variable sépare globalement les classes
-        - distributions très différentes → variable potentiellement utile
-        - distributions très proches → variable peu discriminante
-    2. distribution FN vs TP : on regarde si la variable aide à comprendre les départs ratés.
-        - distributions différentes → la variable semble liée au fait d’être détecté ou raté
-        - distributions proches → la variable n’explique pas bien les FN
-
-    Parameters
-    ----------
-    model : modèle entraîné avec predict_proba
-    X : pd.DataFrame
-        Features
-    y : pd.Series
-        Target binaire
-    num_features : list[str]
-        Liste des variables numériques à analyser
-    threshold : float, default=0.5
-        Seuil de classification appliqué sur predict_proba
-    kind : str, default="kde"
-        "kde" ou "hist"
-    ncols : int, default=2
-        Nombre de colonnes de subplots
+    Pour chaque variable num?rique, trace 2 graphiques :
+    1. distribution classe 1 vs classe 0 : on regarde si la variable s?pare globalement les classes
+        - distributions tr?s diff?rentes ? variable potentiellement utile
+        - distributions tr?s proches ? variable peu discriminante
+    2. distribution FN vs TP : on regarde si la variable aide ? comprendre les d?parts rat?s.
+        - distributions diff?rentes ? la variable semble li?e au fait d??tre d?tect? ou rat?
+        - distributions proches ? la variable n?explique pas bien les FN
     """
     df = X.copy()
     df["y_true"] = y.values
@@ -211,95 +202,62 @@ def plot_numeric_feature_diagnostics(
     )
 
     valid_features = [col for col in num_features if col in df.columns]
-    n_features = len(valid_features)
+    if len(valid_features) == 0:
+        print("Aucune variable num?rique valide ? tracer.")
+        return []
 
-    if n_features == 0:
-        print("Aucune variable numérique valide à tracer.")
-        return
+    output_dir = Path(output_dir) if output_dir is not None else None
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_paths = []
 
     for col in valid_features:
         fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-        # Graphique 1 : séparation globale classe 1 vs classe 0
         if kind == "kde":
             if class_1[col].notna().sum() > 1:
-                sns.kdeplot(
-                    class_1[col],
-                    fill=True,
-                    label="Classe 1",
-                    ax=axes[0],
-                )
+                sns.kdeplot(class_1[col], fill=True, label="Classe 1", ax=axes[0])
             if class_0[col].notna().sum() > 1:
-                sns.kdeplot(
-                    class_0[col],
-                    fill=True,
-                    label="Classe 0",
-                    ax=axes[0],
-                )
+                sns.kdeplot(class_0[col], fill=True, label="Classe 0", ax=axes[0])
         elif kind == "hist":
-            sns.histplot(
-                class_1[col],
-                label="Classe 1",
-                stat="density",
-                kde=True,
-                ax=axes[0],
-                alpha=0.4,
-            )
-            sns.histplot(
-                class_0[col],
-                label="Classe 0",
-                stat="density",
-                kde=True,
-                ax=axes[0],
-                alpha=0.4,
-            )
+            sns.histplot(class_1[col], label="Classe 1", stat="density", kde=True, ax=axes[0], alpha=0.4)
+            sns.histplot(class_0[col], label="Classe 0", stat="density", kde=True, ax=axes[0], alpha=0.4)
         else:
-            raise ValueError("kind doit être 'kde' ou 'hist'")
+            raise ValueError("kind doit ?tre 'kde' ou 'hist'")
 
-        axes[0].set_title(f"{col} — Classe 1 vs Classe 0")
+        axes[0].set_title(f"{col} ? Classe 1 vs Classe 0")
         axes[0].legend()
         axes[0].grid(alpha=0.3)
 
-        # Graphique 2 : erreurs FN vs TP
         if kind == "kde":
             if fn[col].notna().sum() > 1:
-                sns.kdeplot(
-                    fn[col],
-                    fill=True,
-                    label="FN",
-                    ax=axes[1],
-                )
+                sns.kdeplot(fn[col], fill=True, label="FN", ax=axes[1])
             if tp[col].notna().sum() > 1:
-                sns.kdeplot(
-                    tp[col],
-                    fill=True,
-                    label="TP",
-                    ax=axes[1],
-                )
+                sns.kdeplot(tp[col], fill=True, label="TP", ax=axes[1])
         elif kind == "hist":
-            sns.histplot(
-                fn[col],
-                label="FN",
-                stat="density",
-                kde=True,
-                ax=axes[1],
-                alpha=0.4,
-            )
-            sns.histplot(
-                tp[col],
-                label="TP",
-                stat="density",
-                kde=True,
-                ax=axes[1],
-                alpha=0.4,
-            )
+            sns.histplot(fn[col], label="FN", stat="density", kde=True, ax=axes[1], alpha=0.4)
+            sns.histplot(tp[col], label="TP", stat="density", kde=True, ax=axes[1], alpha=0.4)
 
-        axes[1].set_title(f"{col} — FN vs TP")
+        axes[1].set_title(f"{col} ? FN vs TP")
         axes[1].legend()
         axes[1].grid(alpha=0.3)
 
         plt.tight_layout()
-        plt.show()
+
+        if output_dir is not None:
+            safe_col = str(col).replace('/', '_').replace(' ', '_')
+            save_path = output_dir / f"{filename_prefix}{safe_col}.png"
+            fig.savefig(save_path, dpi=200, bbox_inches='tight')
+            saved_paths.append(save_path)
+
+        if show:
+            plt.show()
+
+        plt.close(fig)
+
+    return saved_paths
+
 
 def summarize_numeric_feature_diagnostics(model, X, y, num_features, threshold=0.5):
     """
@@ -360,28 +318,14 @@ def plot_categorical_feature_diagnostics(
     threshold=0.5,
     normalize=True,
     top_n=None,
+    output_dir=None,
+    filename_prefix="",
+    show=True,
 ):
     """
-    Pour chaque variable catégorielle, trace 2 graphiques :
-    1. distribution des modalités pour Classe 1 vs Classe 0
-    2. distribution des modalités pour FN vs TP
-
-    Parameters
-    ----------
-    model : modèle entraîné avec predict_proba
-    X : pd.DataFrame
-        Features
-    y : pd.Series
-        Target binaire
-    cat_features : list[str]
-        Liste des variables catégorielles à analyser
-    threshold : float, default=0.5
-        Seuil de classification appliqué sur predict_proba
-    normalize : bool, default=True
-        Si True, affiche des proportions. Sinon, des effectifs.
-    top_n : int | None, default=None
-        Si renseigné, garde uniquement les top modalités les plus fréquentes
-        sur l'ensemble du dataset.
+    Pour chaque variable cat?gorielle, trace 2 graphiques :
+    1. distribution des modalit?s pour Classe 1 vs Classe 0
+    2. distribution des modalit?s pour FN vs TP
     """
     df = X.copy()
     df["y_true"] = y.values
@@ -399,10 +343,15 @@ def plot_categorical_feature_diagnostics(
     )
 
     valid_features = [col for col in cat_features if col in df.columns]
-
     if not valid_features:
-        print("Aucune variable catégorielle valide à tracer.")
-        return
+        print("Aucune variable cat?gorielle valide ? tracer.")
+        return []
+
+    output_dir = Path(output_dir) if output_dir is not None else None
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_paths = []
 
     for col in valid_features:
         tmp = df[[col, "y_true", "y_pred"]].copy()
@@ -428,43 +377,38 @@ def plot_categorical_feature_diagnostics(
 
         left_df = dist_class_1.merge(dist_class_0, on=col, how="outer").fillna(0)
         right_df = dist_fn.merge(dist_tp, on=col, how="outer").fillna(0)
-
         left_plot = left_df.melt(id_vars=col, var_name="group", value_name="value")
         right_plot = right_df.melt(id_vars=col, var_name="group", value_name="value")
-
         modality_order = tmp[col].value_counts().index.tolist()
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 4))
-
-        sns.barplot(
-            data=left_plot,
-            x=col,
-            y="value",
-            hue="group",
-            order=modality_order,
-            ax=axes[0],
-        )
-        axes[0].set_title(f"{col} — Classe 1 vs Classe 0")
+        sns.barplot(data=left_plot, x=col, y="value", hue="group", order=modality_order, ax=axes[0])
+        axes[0].set_title(f"{col} ? Classe 1 vs Classe 0")
         axes[0].tick_params(axis="x", rotation=45)
         axes[0].grid(alpha=0.3)
 
-        sns.barplot(
-            data=right_plot,
-            x=col,
-            y="value",
-            hue="group",
-            order=modality_order,
-            ax=axes[1],
-        )
-        axes[1].set_title(f"{col} — FN vs TP")
+        sns.barplot(data=right_plot, x=col, y="value", hue="group", order=modality_order, ax=axes[1])
+        axes[1].set_title(f"{col} ? FN vs TP")
         axes[1].tick_params(axis="x", rotation=45)
         axes[1].grid(alpha=0.3)
 
         ylabel = "Proportion" if normalize else "Count"
         axes[0].set_ylabel(ylabel)
         axes[1].set_ylabel(ylabel)
-
         plt.tight_layout()
-        plt.show()
+
+        if output_dir is not None:
+            safe_col = str(col).replace('/', '_').replace(' ', '_')
+            save_path = output_dir / f"{filename_prefix}{safe_col}.png"
+            fig.savefig(save_path, dpi=200, bbox_inches='tight')
+            saved_paths.append(save_path)
+
+        if show:
+            plt.show()
+
+        plt.close(fig)
+
+    return saved_paths
+
 
 
