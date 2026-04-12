@@ -20,7 +20,7 @@ from sklearn.model_selection import StratifiedKFold
 
 def _slice_like(data, indices):
     """Découper des données Pandas ou NumPy à l'aide de la même fonction d'aide"""
-    if hasattr(data, "iloc"):
+    if hasattr(data, "iloc"): #has attribute 
         return data.iloc[indices]
     return data[indices]
 
@@ -276,6 +276,9 @@ def find_threshold_for_target_recall_from_proba(
         "f1": float(best_row["f1"]),
     }
 
+#* ===============================================
+#* OUT OF FOLD 
+#* ===============================================
 
 def get_oof_predicted_proba(
     model,
@@ -286,15 +289,16 @@ def get_oof_predicted_proba(
     random_state: int = 42,
 ) -> np.ndarray:
     """
-    Cette fonction coupe x, y en CV folds stratifiés 
-    Pour chaque folds, elle entraîne une copie sur la partie train
-    Elle prédit ensuite les probabilités sur la partie de validation
-    Et enfin, range ces probabilités à leur place d’origine dans un vecteur final oof_proba
+    Cette fonction 
+        - coupe x, y en CV folds stratifiés 
+        - Pour chaque folds, elle entraîne une copie sur la partie train
+        - Elle prédit ensuite les probabilités sur la partie de validation
+        - Et enfin, range ces probabilités à leur place d’origine dans un vecteur final oof_proba
     """
     fit_kwargs = {} if fit_kwargs is None else dict(fit_kwargs)
 
     skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=random_state)
-    y_array = np.asarray(y)
+    y_array = np.asarray(y) # On convertit y en array NumPy pour être sûr que StratifiedKFold.split() fonctionne proprement
     oof_proba = np.full(len(y_array), np.nan, dtype=float)
 
     for train_idx, valid_idx in skf.split(X, y_array):

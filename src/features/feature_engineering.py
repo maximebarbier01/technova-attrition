@@ -206,4 +206,76 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
         (df["frequent_travel"] == 1)
     ).astype(int)
 
+    #? ******* NOUVELLES FEATURES APRES ANALYSES DES ERREURS EXTREMES *******    
+
+    # 1. Ecart de salaire par rapport au poste
+    df["salary_gap_vs_poste_median"] = (
+        df["revenu_mensuel"]
+        - df.groupby("poste")["revenu_mensuel"].transform("median")
+    )
+
+    # 2. Ecart de satisfaction par rapport au poste
+    df["satisfaction_gap_vs_poste_mean"] = (
+        df["satisfaction_global"]
+        - df.groupby("poste")["satisfaction_global"].transform("mean")
+    )
+
+    # 3. Retard de promotion par rapport aux pairs du même poste
+    df["promo_delay_vs_poste_median"] = (
+        df["annees_depuis_la_derniere_promotion"]
+        - df.groupby("poste")["annees_depuis_la_derniere_promotion"].transform("median")
+    )
+
+    # 4. Part de l'ancienneté passée dans le poste actuel
+    df["role_stagnation_ratio"] = (
+        df["annees_dans_le_poste_actuel"]
+        / (df["annees_dans_l_entreprise"] + 1)
+    )
+
+    # 5. Profil senior potentiellement en plateau
+    df["senior_plateau_flag"] = (
+        (df["niveau_hierarchique_poste"] >= 4)
+        & (df["annees_depuis_la_derniere_promotion"] >= 3)
+        & (df["satisfaction_global"] <= 3.5)
+    ).astype(int)
+
+    # 6. Profil consulting à risque "silencieux"
+    df["consulting_hidden_attrition"] = (
+        (df["departement"] == "Consulting")
+        & (df["satisfaction_global"].between(2.0, 3.5))
+        & (df["annees_dans_le_poste_actuel"] >= 3)
+        & (df["frequence_deplacement"] != "Aucun")
+    ).astype(int)
+
+    # 7. Profil Assistant de Direction à risque discret
+    df["assistant_direction_hidden_attrition"] = (
+        (df["poste"] == "Assistant de Direction")
+        & (df["satisfaction_global"] <= 3.5)
+        & (df["annees_dans_le_poste_actuel"] >= 2)
+    ).astype(int)
+
+    # 8. Profil Tech Lead à risque discret
+    df["techlead_hidden_attrition"] = (
+        (df["poste"] == "Tech Lead")
+        & (df["satisfaction_global"] <= 3.0)
+        & (df["annees_depuis_la_derniere_promotion"] >= 2)
+    ).astype(int)
+
+    # 9. Sous-investissement en formation par rapport au département
+    df["training_gap_vs_department_median"] = (
+        df["nb_formations_suivies"]
+        - df.groupby("departement")["nb_formations_suivies"].transform("median")
+    )
+
+    df["low_training_vs_department"] = (
+        df["training_gap_vs_department_median"] < 0
+    ).astype(int)
+
+    # 10. Faible engagement PEE
+    df["pee_disengagement_flag"] = (
+        (df["nombre_participation_pee"] == 0)
+        & (df["annees_dans_l_entreprise"] >= 2)
+    ).astype(int)
+
+
     return df 

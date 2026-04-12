@@ -15,6 +15,7 @@ from sklearn.pipeline import Pipeline
 
 from src.data.preprocessing import build_preprocessor
 from src.modeling.train import train_model
+from src.modeling.compare import get_oof_predicted_proba
 
 def test_train_model_smoke():
     X_train = pd.DataFrame(

@@ -87,6 +87,22 @@ FE_NUM_CAT_DRIVEN = [
     "consulting_travel_risk",
 ]
 
+
+# FE cibl?es apr?s analyse des erreurs extr?mes
+FE_NUM_SILENT_ATTRITION = [
+    "salary_gap_vs_poste_median",
+    "satisfaction_gap_vs_poste_mean",
+    "promo_delay_vs_poste_median",
+    "role_stagnation_ratio",
+    "senior_plateau_flag",
+    "consulting_hidden_attrition",
+    "assistant_direction_hidden_attrition",
+    "techlead_hidden_attrition",
+    "training_gap_vs_department_median",
+    "low_training_vs_department",
+    "pee_disengagement_flag",
+]
+
 #* =========================================================
 #* FEATURE SETS
 #* =========================================================
@@ -284,8 +300,20 @@ FEATURE_SETS = {
             "age_bucket",
         ],
     },
-}
 
+
+    #? -----------------------------------------------------
+    #? 9. Set après analyses des erreurs extrêmes du modèles
+    #? -----------------------------------------------------
+    #? -----------------------------------------------------
+    #? 9. Set apr?s analyses des erreurs extr?mes du mod?le
+    #? -----------------------------------------------------
+    "fe_silent_attrition_v1": {
+        "num": RAW_NUM_FEATURES + FE_NUM_CORE + FE_NUM_FLAGS + FE_NUM_SILENT_ATTRITION,
+        "cat": RAW_CAT_FEATURES + FE_CAT_BUCKETS,
+    }
+
+}
 #* =========================================================
 #* FONCTION D'UTILISATION 
 #* =========================================================
