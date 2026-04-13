@@ -203,7 +203,7 @@ def plot_numeric_feature_diagnostics(
 
     valid_features = [col for col in num_features if col in df.columns]
     if len(valid_features) == 0:
-        print("Aucune variable num?rique valide ? tracer.")
+        print("Aucune variable numérique valide à tracer.")
         return []
 
     output_dir = Path(output_dir) if output_dir is not None else None
@@ -224,9 +224,9 @@ def plot_numeric_feature_diagnostics(
             sns.histplot(class_1[col], label="Classe 1", stat="density", kde=True, ax=axes[0], alpha=0.4)
             sns.histplot(class_0[col], label="Classe 0", stat="density", kde=True, ax=axes[0], alpha=0.4)
         else:
-            raise ValueError("kind doit ?tre 'kde' ou 'hist'")
+            raise ValueError("kind doit être 'kde' ou 'hist'")
 
-        axes[0].set_title(f"{col} ? Classe 1 vs Classe 0")
+        axes[0].set_title(f"{col} - Classe 1 vs Classe 0")
         axes[0].legend()
         axes[0].grid(alpha=0.3)
 
@@ -239,7 +239,7 @@ def plot_numeric_feature_diagnostics(
             sns.histplot(fn[col], label="FN", stat="density", kde=True, ax=axes[1], alpha=0.4)
             sns.histplot(tp[col], label="TP", stat="density", kde=True, ax=axes[1], alpha=0.4)
 
-        axes[1].set_title(f"{col} ? FN vs TP")
+        axes[1].set_title(f"{col} - FN vs TP")
         axes[1].legend()
         axes[1].grid(alpha=0.3)
 
@@ -344,7 +344,7 @@ def plot_categorical_feature_diagnostics(
 
     valid_features = [col for col in cat_features if col in df.columns]
     if not valid_features:
-        print("Aucune variable cat?gorielle valide ? tracer.")
+        print("Aucune variable catégorielle valide à tracer.")
         return []
 
     output_dir = Path(output_dir) if output_dir is not None else None
@@ -383,12 +383,12 @@ def plot_categorical_feature_diagnostics(
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 4))
         sns.barplot(data=left_plot, x=col, y="value", hue="group", order=modality_order, ax=axes[0])
-        axes[0].set_title(f"{col} ? Classe 1 vs Classe 0")
+        axes[0].set_title(f"{col} - Classe 1 vs Classe 0")
         axes[0].tick_params(axis="x", rotation=45)
         axes[0].grid(alpha=0.3)
 
         sns.barplot(data=right_plot, x=col, y="value", hue="group", order=modality_order, ax=axes[1])
-        axes[1].set_title(f"{col} ? FN vs TP")
+        axes[1].set_title(f"{col} - FN vs TP")
         axes[1].tick_params(axis="x", rotation=45)
         axes[1].grid(alpha=0.3)
 
