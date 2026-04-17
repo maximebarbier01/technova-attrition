@@ -424,6 +424,16 @@ def main() -> None:
         show=False,
     )
 
+    plot_probability_distrib_per_pred_type(
+        model=model,
+        X=prepared["X_test"],
+        y=prepared["y_test"],
+        threshold=FINAL_MODEL["threshold"],
+        categories_to_exclude=["true_negative","false_positive"],
+        save_path=probability_plot_path,
+        show=False,
+    )
+
     numeric_diag_paths = plot_numeric_feature_diagnostics(
         model=model,
         X=prepared["X_test"],

@@ -3,7 +3,192 @@ import seaborn as sns
 import pandas as pd
 import math
 from pathlib import Path
+from matplotlib.ticker import PercentFormatter
 
+
+#************************
+#* Analyse exploratoire *
+#************************
+
+# ? ======  MODALITES NUMERIQUES ======
+
+def plot_attrition_by_num(
+    df: pd.DataFrame,
+    col: str,
+    target: str = "a_quitte_l_entreprise",
+    q: int = 5,
+    figsize: tuple = (8, 4.8),
+    color: str = "#d5b5f5",
+    # edgecolor: str = "#2F4B6E",
+    annotate: bool = True,
+):
+    # Copie de travail
+    tmp_df = df[[col, target]].dropna().copy()
+
+    # Binning quantiles
+    bins = pd.qcut(tmp_df[col], q=q, duplicates="drop")
+
+    # Agrégation
+    agg = (
+        tmp_df
+        .groupby(bins, observed=False)[target]
+        .agg(["mean", "count"])
+        .reset_index()
+        .rename(columns={"mean": "attrition_rate", "count": "n"})
+    )
+
+    # Labels courts pour le PPT
+    agg["bin_label"] = [f"Q{i+1}" for i in range(len(agg))]
+
+    # Bornes lisibles pour éventuel sous-titre / debug
+    agg["left"] = agg[col].apply(lambda x: x.left)
+    agg["right"] = agg[col].apply(lambda x: x.right)
+
+    # Figure
+    fig, ax = plt.subplots(figsize=figsize)
+
+    bars = ax.bar(
+        agg["bin_label"],
+        agg["attrition_rate"],
+        color=color,
+        # edgecolor=edgecolor,
+        linewidth=1.2,
+        width=0.65,
+    )
+
+    # Titre propre
+    pretty_col = col.replace("_", " ").capitalize()
+    ax.set_title(f"Taux d’attrition selon {pretty_col}", fontsize=16, weight="bold", pad=15)
+
+    # Axes
+    ax.set_ylabel("Taux d’attrition", fontsize=11)
+    ax.set_xlabel("")
+    ax.yaxis.set_major_formatter(PercentFormatter(1))
+    ax.tick_params(axis="x", labelsize=11)
+    ax.tick_params(axis="y", labelsize=10)
+
+    # Grille légère horizontale seulement
+    ax.grid(axis="y", linestyle="--", alpha=0.3)
+    ax.set_axisbelow(True)
+
+    # Nettoyage des bordures
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    # Laisser de l'air au-dessus
+    ymax = agg["attrition_rate"].max()
+    ax.set_ylim(0, ymax * 1.20)
+
+    # Annotations sur les barres
+    if annotate:
+        for bar, rate, n in zip(bars, agg["attrition_rate"], agg["n"]):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + ymax * 0.03,
+                f"{rate:.1%}\n(n={n})",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
+
+    # Sous-titre discret avec bornes réelles
+    ranges_txt = "   ".join(
+        [
+            f"{lbl}: [{left:.0f} ; {right:.0f}]"
+            for lbl, left, right in zip(agg["bin_label"], agg["left"], agg["right"])
+        ]
+    )
+    fig.text(
+        0.5, -0.02,
+        f"Classes en quantiles — {ranges_txt}",
+        ha="center",
+        fontsize=9,
+        color="dimgray"
+    )
+
+    plt.tight_layout()
+    plt.show()
+
+    return agg
+
+# ? ======  MODALITES CATEGORIELLES ======
+
+def plot_attrition_by_cat(
+    df: pd.DataFrame,
+    col: str,
+    target: str = "a_quitte_l_entreprise",
+    figsize: tuple = (8, 4.8),
+    color: str = "#a7deb7",
+    highlight_color: str = "#d5b5f5",
+    min_count: int | None = None,
+    annotate: bool = True,
+    highlight_max: bool = True,
+):
+    tmp_df = df[[col, target]].dropna().copy()
+
+    agg = (
+        tmp_df
+        .groupby(col, dropna=False)[target]
+        .agg(["mean", "count"])
+        .reset_index()
+        .rename(columns={col: "category", "mean": "attrition_rate", "count": "n"})
+        .sort_values("attrition_rate", ascending=True)
+    )
+
+    # Optionnel : filtrer les catégories trop rares
+    if min_count is not None:
+        agg = agg.loc[agg["n"] >= min_count].copy()
+
+    if agg.empty:
+        print(f"Aucune catégorie exploitable pour {col}")
+        return None
+
+    colors = [color] * len(agg)
+    if highlight_max:
+        max_idx = agg["attrition_rate"].idxmax()
+        pos = agg.index.get_loc(max_idx)
+        colors[pos] = highlight_color
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    bars = ax.barh(
+        y=agg["category"],
+        width=agg["attrition_rate"],
+        color=colors,
+        # edgecolor="#2F4B6E",
+        # linewidth=1.0,
+        # height=0.75,
+    )
+
+    pretty_col = col.replace("_", " ")#.capitalize()
+    ax.set_title(f"Taux d’attrition selon {pretty_col}", fontsize=16, weight="bold", pad=12)
+    ax.set_xlabel("Taux d’attrition", fontsize=11)
+    ax.set_ylabel("")
+    ax.xaxis.set_major_formatter(PercentFormatter(1))
+
+    ax.grid(axis="x", linestyle="--", alpha=0.3)
+    ax.set_axisbelow(True)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    xmax = agg["attrition_rate"].max()
+    ax.set_xlim(0, xmax * 1.20)
+
+    if annotate:
+        for bar, rate, n in zip(bars, agg["attrition_rate"], agg["n"]):
+            ax.text(
+                x=bar.get_width() + xmax * 0.02,
+                y=bar.get_y() + bar.get_height() / 2,
+                s=f"{rate:.1%}  (n={n})",
+                va="center",
+                fontsize=9,
+            )
+
+    plt.tight_layout()
+    plt.show()
+
+    return agg
 
 def get_prediction_type(pred, target):
     if pred == 1 and target == 1:
@@ -25,6 +210,9 @@ color_palette = {
     "false_negative": "orange",
 }
 
+#*******************************
+#* Analyse distribution modèle *
+#*******************************
 
 def plot_probability_distrib_per_pred_type(
     model,
@@ -83,6 +271,7 @@ def plot_probability_distrib_per_pred_type(
     plt.close(fig)
     return df_filtered
 
+# ? ======  MODALITES NUMERIQUES ======
 
 def plot_numeric_distributions_by_prediction_type(
     model,
@@ -259,56 +448,8 @@ def plot_numeric_feature_diagnostics(
     return saved_paths
 
 
-def summarize_numeric_feature_diagnostics(model, X, y, num_features, threshold=0.5):
-    """
-    Résumé tabulaire des moyennes par variable pour :
-    - classe 1
-    - classe 0
-    - TP
-    - FN
-    """
-    df = X.copy()
-    df["y_true"] = y.values
-    df["y_proba"] = model.predict_proba(X)[:, 1]
-    df["y_pred"] = (df["y_proba"] >= threshold).astype(int)
+# ? ======  MODALITES CATEGORIELLES ======
 
-    fn = df[(df["y_true"] == 1) & (df["y_pred"] == 0)].copy()
-    tp = df[(df["y_true"] == 1) & (df["y_pred"] == 1)].copy()
-    class_1 = df[df["y_true"] == 1].copy()
-    class_0 = df[df["y_true"] == 0].copy()
-
-    valid_features = [col for col in num_features if col in df.columns]
-
-    summary = pd.DataFrame(
-        {
-            "mean_class_1": class_1[valid_features].mean(),
-            "mean_class_0": class_0[valid_features].mean(),
-            "mean_tp": tp[valid_features].mean(),
-            "mean_fn": fn[valid_features].mean(),
-        }
-    )
-
-    summary["abs_diff_class1_class0"] = (
-        summary["mean_class_1"] - summary["mean_class_0"]
-    ).abs()
-
-    summary["abs_diff_fn_tp"] = (
-        summary["mean_fn"] - summary["mean_tp"]
-    ).abs()
-
-    return summary.sort_values(
-        ["abs_diff_fn_tp", "abs_diff_class1_class0"],
-        ascending=False,
-    )
-
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-
-# *****************************************
-# *       MODALITES CATEGORIELLES         *
-# *****************************************
 
 def plot_categorical_feature_diagnostics(
     model,
@@ -409,6 +550,3 @@ def plot_categorical_feature_diagnostics(
         plt.close(fig)
 
     return saved_paths
-
-
-

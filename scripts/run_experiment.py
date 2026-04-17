@@ -29,6 +29,7 @@ from src.modeling.train import train_model
 
 TO_TEST = [
     "raw_baseline",
+    "raw_baseline_reduc",
     "fe_core",
     "fe_compact",
     "fe_fn_focus",

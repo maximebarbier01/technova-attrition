@@ -10,32 +10,57 @@ DROP_COLUMNS = [
 ]
 
 #* =========================================================
-#* RAW FEATURES
+#* RAW FEATURES STRICT 
 #* =========================================================
 
 RAW_NUM_FEATURES = [
     "age",
     "revenu_mensuel",
+    "nombre_experiences_precedentes",
     "annee_experience_totale",
     "annees_dans_l_entreprise",
     "annees_dans_le_poste_actuel",
-    "annees_depuis_la_derniere_promotion",
-    "distance_domicile_travail",
     "satisfaction_employee_environnement",
+    "satisfaction_employee_nature_travail",
     "satisfaction_employee_equipe",
     "satisfaction_employee_equilibre_pro_perso",
+    "note_evaluation_precedente",
+    "note_evaluation_actuelle",
+    "niveau_hierarchique_poste",
+    "heure_supplementaires",
+    "augementation_salaire_precedente",
+    "nombre_participation_pee",
+    "nb_formations_suivies",
+    "distance_domicile_travail",
+    "niveau_education",
+    "annees_depuis_la_derniere_promotion",
+    "annes_sous_responsable_actuel",
+]
+
+RAW_REDUCED_NUM_FEATURES = [
+    "age",
+    "revenu_mensuel",
+    "annees_dans_l_entreprise",
+    "annees_dans_le_poste_actuel",
     "satisfaction_global",
     "note_evaluation_precedente",
     "note_evaluation_actuelle",
     "niveau_hierarchique_poste",
+    "heure_supplementaires",
+    "augementation_salaire_precedente",
+    "nb_formations_suivies",
+    "distance_domicile_travail",
+    "niveau_education",
+    "annees_depuis_la_derniere_promotion",
+    "annes_sous_responsable_actuel",
 ]
+
 
 RAW_CAT_FEATURES = [
     "genre",
     "statut_marital",
     "departement",
     "poste",
-    "niveau_education",
     "domaine_etude",
     "frequence_deplacement",
 ]
@@ -109,11 +134,20 @@ FE_NUM_SILENT_ATTRITION = [
 
 FEATURE_SETS = {
     #? -----------------------------------------------------
-    #? 1. Référence brute
+    #? 1.A Référence brute strict
     #? utile pour benchmark
     #? -----------------------------------------------------
     "raw_baseline": {
         "num": RAW_NUM_FEATURES,
+        "cat": RAW_CAT_FEATURES,
+    },
+
+    #? -----------------------------------------------------
+    #? 1.B Référence brute réduite
+    #? utile pour benchmark sans satisfaction détaillée
+    #? -----------------------------------------------------
+    "raw_baseline_reduc": {
+        "num": RAW_REDUCED_NUM_FEATURES,
         "cat": RAW_CAT_FEATURES,
     },
 
@@ -152,6 +186,7 @@ FEATURE_SETS = {
             "note_evaluation_precedente",
             "note_evaluation_actuelle",
             "niveau_hierarchique_poste",
+            "niveau_education",
             "salary_vs_level",
             "experience_mismatch",
             "promotion_speed",
@@ -168,7 +203,6 @@ FEATURE_SETS = {
             "statut_marital",
             "departement",
             "poste",
-            "niveau_education",
             "domaine_etude",
             "frequence_deplacement",
             "age_bucket",
@@ -189,6 +223,7 @@ FEATURE_SETS = {
             "distance_domicile_travail",
             "satisfaction_global",
             "niveau_hierarchique_poste",
+            "niveau_education",
             "salary_vs_level",
             "experience_mismatch",
             "promotion_speed",
@@ -246,7 +281,6 @@ FEATURE_SETS = {
             "statut_marital",
             "departement",
             "poste",
-            "niveau_education",
             "domaine_etude",
             "frequence_deplacement",
             "age_bucket",
@@ -303,10 +337,7 @@ FEATURE_SETS = {
 
 
     #? -----------------------------------------------------
-    #? 9. Set après analyses des erreurs extrêmes du modèles
-    #? -----------------------------------------------------
-    #? -----------------------------------------------------
-    #? 9. Set apr?s analyses des erreurs extr?mes du mod?le
+    #? 9. Set après analyse des erreurs extrêmes du modèle
     #? -----------------------------------------------------
     "fe_silent_attrition_v1": {
         "num": RAW_NUM_FEATURES + FE_NUM_CORE + FE_NUM_FLAGS + FE_NUM_SILENT_ATTRITION,
@@ -318,8 +349,37 @@ FEATURE_SETS = {
 #* FONCTION D'UTILISATION 
 #* =========================================================
 
+def _find_duplicates(features: list[str]) -> list[str]:
+    seen = set()
+    duplicates = []
+
+    for feature in features:
+        if feature in seen and feature not in duplicates:
+            duplicates.append(feature)
+        seen.add(feature)
+
+    return duplicates
+
+
 def get_feature_set(name: str) -> dict:
     if name not in FEATURE_SETS:
         available = ", ".join(FEATURE_SETS.keys())
         raise ValueError(f"Unknown feature set: {name}. Available: {available}")
-    return FEATURE_SETS[name]
+
+    feature_set = FEATURE_SETS[name]
+    num_features = list(feature_set["num"])
+    cat_features = list(feature_set["cat"])
+
+    duplicated_num = _find_duplicates(num_features)
+    duplicated_cat = _find_duplicates(cat_features)
+    overlap = sorted(set(num_features).intersection(cat_features))
+
+    if duplicated_num or duplicated_cat or overlap:
+        raise ValueError(
+            f"Invalid feature set '{name}'. "
+            f"duplicated_num={duplicated_num}, "
+            f"duplicated_cat={duplicated_cat}, "
+            f"num_cat_overlap={overlap}"
+        )
+
+    return {"num": num_features, "cat": cat_features}
