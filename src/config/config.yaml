@@ -1,36 +1,89 @@
 project:
   name: technova-attrition
+  description: Analyse et classification du risque d attrition chez TechNova Partners
   target: a_quitte_l_entreprise
-  random_state: 42
-
+  python_version: '>=3.11,<3.12'
+  random_state: 51
 paths:
   raw_dir: data/raw
   interim_dir: data/interim
   processed_dir: data/processed
   reports_dir: reports
-  figures_dir: reports/figures
-
+  figures_dir: reports/figure
+  notebooks_dir: notebooks
 data:
   raw_files:
     sirh: data/raw/extrait_sirh.csv.csv
+    evaluations: data/raw/extrait_eval.csv
     sondage: data/raw/extrait_sondage.csv
-    eval: data/raw/extrait_eval.csv
-
+  central_file: data/interim/data_eda.csv
+  target_distribution:
+    n_rows: 1470
+    negative_class_0: 1233
+    positive_class_1: 237
+    positive_rate: 0.161
+  join_keys:
+  - id_employee
+  - eval_number
+  - code_sondage
 split:
   test_size: 0.2
-  val_size: 0.2
   stratify: true
-
+  random_state: 51
+preprocessing:
+  strategy: ColumnTransformer inside sklearn/imblearn pipelines
+  numeric_imputer: median
+  binary_numeric_imputer: most_frequent
+  nominal_encoder: OneHotEncoder(handle_unknown=ignore, drop=if_binary)
+  ordinal_encoder: OrdinalEncoder(handle_unknown=use_encoded_value, unknown_value=-1)
+  standard_scaler: StandardScaler for standard numeric features
+  robust_scaler: RobustScaler for numeric features with outliers
+  ordinal_category_orders:
+    frequence_deplacement:
+    - Aucun
+    - Occasionnel
+    - Frequent
+    age_bucket:
+    - young
+    - mid
+    - senior
+    niveau_education:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
 evaluation:
   scoring_metric: average_precision
-  target_recall: 0.80
+  metric_rationale: Prioriser les vrais departs dans une classe positive minoritaire
   default_threshold: 0.5
-
+  target_recall: 0.9
+  cv_folds: 5
+  threshold_selection: OOF cross-validation on train set only
+  final_threshold_strategy: seuil_cv_opt_prc
+  final_threshold: 0.211717
 experiment:
-  feature_sets_to_test:
-    - raw_baseline
-    - fe_core
-    - fe_compact
-    - fe_fn_focus
-    - fe_full_robust
   spec_mode: baseline+tuned
+  feature_sets_to_test:
+  - raw_baseline
+  - raw_baseline_reduc
+  - fe_core
+  - fe_compact
+  - fe_fn_focus
+  - fe_full_robust
+  model_families:
+  - dummy
+  - linear_models
+  - tree_ensembles
+  - boosting_models
+  - kernel_svm
+  - instance_based
+final_model:
+  candidate_name: best_lightgbm_raw_baseline
+  model_key: lightgbm
+  feature_set: raw_baseline
+  sampling_method: borderline
+  threshold: 0.211717
+  threshold_strategy: seuil_cv_opt_prc
+  interpretability_script: scripts/run_final_interpretability.py
+  error_analysis_script: scripts/run_error_analysis.py

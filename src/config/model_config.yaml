@@ -1,47 +1,120 @@
-models:
+final_model:
+  candidate_name: best_lightgbm_raw_baseline
+  display_name: LightGBM raw_baseline
+  model_key: lightgbm
+  family: boosting_lgbm
+  feature_set: raw_baseline
+  sampling_method: borderline
+  scoring_metric: average_precision
+  threshold: 0.211717
+  threshold_strategy: seuil_cv_opt_prc
+  random_state: 51
+  test_size: 0.2
+  cv_folds: 5
+  params:
+    n_estimators: 700
+    learning_rate: 0.01
+    num_leaves: 63
+    max_depth: 5
+    min_child_samples: 20
+    subsample: 0.6
+    colsample_bytree: 0.6
+    reg_alpha: 0.01
+    reg_lambda: 0.5
+    class_weight: null
+  test_metrics:
+    precision_1: 0.526316
+    recall_1: 0.851064
+    f1_1: 0.650407
+    average_precision: 0.695195
+    tn: 211
+    fp: 36
+    fn: 7
+    tp: 40
+  error_analysis:
+    false_negatives: 7
+    false_positives: 36
+    confident_false_negatives: 0
+    confident_false_positives: 12
+    business_reading: Modele retenu car il reduit l attrition silencieuse, au prix
+      de davantage d alertes RH.
+challenger_models:
+- candidate_name: best_svc_fe_full_robust
+  display_name: SVC fe_full_robust
+  model_key: svc
+  family: kernel_svm
+  feature_set: fe_full_robust
+  sampling_method: borderline
+  threshold: 0.445073
+  threshold_strategy: seuil_cv_opt_prc
+  test_metrics:
+    precision_1: 0.611111
+    recall_1: 0.702128
+    f1_1: 0.653465
+    average_precision: 0.687591
+    tn: 226
+    fp: 21
+    fn: 14
+    tp: 33
+  business_reading: Challenger plus precis mais rate deux fois plus de departs que
+    LightGBM.
+- candidate_name: best_random_forest_fe_full_robust
+  display_name: Random Forest fe_full_robust
+  model_key: random_forest
+  family: tree_ensemble
+  feature_set: fe_full_robust
+  sampling_method: borderline
+  threshold: 0.254948
+  threshold_strategy: seuil_cv_opt_prc
+  test_metrics:
+    precision_1: 0.454545
+    recall_1: 0.744681
+    f1_1: 0.564516
+    average_precision: 0.70972
+    tn: 205
+    fp: 42
+    fn: 12
+    tp: 35
+  business_reading: Bonne average precision mais compromis operationnel moins favorable.
+baseline_models:
   dummy:
     enabled: true
     family: baseline
     sampling_method: null
-    params:
-      strategy: most_frequent
-
   logistic_regression:
     enabled: true
     family: linear
-    variants:
-      - name: log_reg_baseline
-        sampling_method: null
-        params:
-          penalty: l2
-          C: 1.0
-          class_weight: balanced
-          max_iter: 2000
-      - name: log_reg_smote
-        sampling_method: smote
-        params:
-          penalty: l2
-          C: 1.0
-          class_weight: balanced
-          max_iter: 2000
-      - name: log_reg_borderline
-        sampling_method: borderline
-        params:
-          penalty: l2
-          C: 1.0
-          class_weight: balanced
-          max_iter: 2000
-
+  lasso_logistic_regression:
+    enabled: true
+    family: linear_l1
+  elastic_net_logistic_regression:
+    enabled: true
+    family: linear_elastic_net
   random_forest:
     enabled: true
     family: tree_ensemble
-
   xgboost:
     enabled: true
     family: boosting
-
+  lightgbm:
+    enabled: true
+    family: boosting_lgbm
   catboost:
     enabled: true
     family: boosting_cat
-    params:
-      auto_class_weights: Balanced
+  knn:
+    enabled: true
+    family: instance_based
+  svc:
+    enabled: true
+    family: kernel_svm
+sampling_methods_tested:
+- null
+- smote
+- borderline
+- smote_under
+selection_rationale:
+- Le besoin metier priorise la reduction des faux negatifs.
+- LightGBM detecte 40 departs sur 47 dans le test.
+- Les faux positifs supplementaires sont interpretes comme des alertes plausibles
+  a investiguer.

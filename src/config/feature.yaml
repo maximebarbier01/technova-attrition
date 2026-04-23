@@ -1,102 +1,457 @@
 target: a_quitte_l_entreprise
-
 drop_columns:
-  - Unnamed: 0
-  - id_employee
-  - eval_number
-  - code_sondage
-
+- 'Unnamed: 0'
+- id_employee
+- eval_number
+- code_sondage
+feature_groups:
+  raw_num_features:
+  - age
+  - revenu_mensuel
+  - nombre_experiences_precedentes
+  - annee_experience_totale
+  - annees_dans_l_entreprise
+  - annees_dans_le_poste_actuel
+  - satisfaction_employee_environnement
+  - satisfaction_employee_nature_travail
+  - satisfaction_employee_equipe
+  - satisfaction_employee_equilibre_pro_perso
+  - note_evaluation_precedente
+  - note_evaluation_actuelle
+  - niveau_hierarchique_poste
+  - heure_supplementaires
+  - augementation_salaire_precedente
+  - nombre_participation_pee
+  - nb_formations_suivies
+  - distance_domicile_travail
+  - niveau_education
+  - annees_depuis_la_derniere_promotion
+  - annes_sous_responsable_actuel
+  raw_reduced_num_features:
+  - age
+  - revenu_mensuel
+  - annees_dans_l_entreprise
+  - annees_dans_le_poste_actuel
+  - satisfaction_global
+  - note_evaluation_precedente
+  - note_evaluation_actuelle
+  - niveau_hierarchique_poste
+  - heure_supplementaires
+  - augementation_salaire_precedente
+  - nb_formations_suivies
+  - distance_domicile_travail
+  - niveau_education
+  - annees_depuis_la_derniere_promotion
+  - annes_sous_responsable_actuel
+  raw_cat_features:
+  - genre
+  - statut_marital
+  - departement
+  - poste
+  - domaine_etude
+  - frequence_deplacement
+  fe_cat_buckets:
+  - age_bucket
+  - revenu_bin
+  fe_num_core:
+  - salary_vs_level
+  - experience_mismatch
+  - promotion_speed
+  - promotion_delay
+  - delta_evaluation
+  fe_num_flags:
+  - is_low_salary_for_job
+  - stagnation_flag
+  - long_commute
+  - mid_level
+  fe_num_risk:
+  - grey_zone_employee
+  - career_frustration
+  - underpaid_senior
+  - fn_risk_profile
+  fe_num_cat_driven:
+  - consulting_risk
+  - married_fn_risk
+  - tech_fn_risk
+  - travel_fn_risk
+  - categorical_fn_profile
+  - senior_frustration
+  - tech_stagnation
+  - consulting_travel_risk
+  fe_num_silent_attrition:
+  - salary_gap_vs_poste_median
+  - satisfaction_gap_vs_poste_mean
+  - promo_delay_vs_poste_median
+  - role_stagnation_ratio
+  - senior_plateau_flag
+  - consulting_hidden_attrition
+  - assistant_direction_hidden_attrition
+  - techlead_hidden_attrition
+  - training_gap_vs_department_median
+  - low_training_vs_department
+  - pee_disengagement_flag
 feature_sets:
   raw_baseline:
     num:
-      - age
-      - revenu_mensuel
-      - annee_experience_totale
-      - annees_dans_l_entreprise
-      - annees_dans_le_poste_actuel
-      - annees_depuis_la_derniere_promotion
-      - distance_domicile_travail
-      - satisfaction_employee_environnement
-      - satisfaction_employee_equipe
-      - satisfaction_employee_equilibre_pro_perso
-      - satisfaction_global
-      - note_evaluation_precedente
-      - note_evaluation_actuelle
-      - niveau_hierarchique_poste
+    - age
+    - revenu_mensuel
+    - nombre_experiences_precedentes
+    - annee_experience_totale
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - satisfaction_employee_environnement
+    - satisfaction_employee_nature_travail
+    - satisfaction_employee_equipe
+    - satisfaction_employee_equilibre_pro_perso
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - heure_supplementaires
+    - augementation_salaire_precedente
+    - nombre_participation_pee
+    - nb_formations_suivies
+    - distance_domicile_travail
+    - niveau_education
+    - annees_depuis_la_derniere_promotion
+    - annes_sous_responsable_actuel
     cat:
-      - genre
-      - statut_marital
-      - departement
-      - poste
-      - niveau_education
-      - domaine_etude
-      - frequence_deplacement
-
+    - genre
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+  raw_baseline_reduc:
+    num:
+    - age
+    - revenu_mensuel
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - satisfaction_global
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - heure_supplementaires
+    - augementation_salaire_precedente
+    - nb_formations_suivies
+    - distance_domicile_travail
+    - niveau_education
+    - annees_depuis_la_derniere_promotion
+    - annes_sous_responsable_actuel
+    cat:
+    - genre
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+  raw_plus_buckets:
+    num:
+    - age
+    - revenu_mensuel
+    - nombre_experiences_precedentes
+    - annee_experience_totale
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - satisfaction_employee_environnement
+    - satisfaction_employee_nature_travail
+    - satisfaction_employee_equipe
+    - satisfaction_employee_equilibre_pro_perso
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - heure_supplementaires
+    - augementation_salaire_precedente
+    - nombre_participation_pee
+    - nb_formations_suivies
+    - distance_domicile_travail
+    - niveau_education
+    - annees_depuis_la_derniere_promotion
+    - annes_sous_responsable_actuel
+    cat:
+    - genre
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+    - revenu_bin
+  fe_core:
+    num:
+    - age
+    - revenu_mensuel
+    - nombre_experiences_precedentes
+    - annee_experience_totale
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - satisfaction_employee_environnement
+    - satisfaction_employee_nature_travail
+    - satisfaction_employee_equipe
+    - satisfaction_employee_equilibre_pro_perso
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - heure_supplementaires
+    - augementation_salaire_precedente
+    - nombre_participation_pee
+    - nb_formations_suivies
+    - distance_domicile_travail
+    - niveau_education
+    - annees_depuis_la_derniere_promotion
+    - annes_sous_responsable_actuel
+    - salary_vs_level
+    - experience_mismatch
+    - promotion_speed
+    - promotion_delay
+    - delta_evaluation
+    - is_low_salary_for_job
+    - stagnation_flag
+    - long_commute
+    - mid_level
+    cat:
+    - genre
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+    - revenu_bin
   fe_compact:
     num:
-      - age
-      - revenu_mensuel
-      - annee_experience_totale
-      - annees_dans_l_entreprise
-      - annees_dans_le_poste_actuel
-      - annees_depuis_la_derniere_promotion
-      - distance_domicile_travail
-      - satisfaction_global
-      - note_evaluation_precedente
-      - note_evaluation_actuelle
-      - niveau_hierarchique_poste
-      - salary_vs_level
-      - experience_mismatch
-      - promotion_speed
-      - promotion_delay
-      - delta_evaluation
-      - is_low_salary_for_job
-      - stagnation_flag
-      - long_commute
-      - mid_level
-      - career_frustration
-      - fn_risk_profile
+    - age
+    - revenu_mensuel
+    - annee_experience_totale
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - annees_depuis_la_derniere_promotion
+    - distance_domicile_travail
+    - satisfaction_global
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - niveau_education
+    - salary_vs_level
+    - experience_mismatch
+    - promotion_speed
+    - promotion_delay
+    - delta_evaluation
+    - is_low_salary_for_job
+    - stagnation_flag
+    - long_commute
+    - mid_level
+    - career_frustration
+    - fn_risk_profile
     cat:
-      - statut_marital
-      - departement
-      - poste
-      - niveau_education
-      - domaine_etude
-      - frequence_deplacement
-      - age_bucket
-      - revenu_bin
-
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+    - revenu_bin
   fe_fn_focus:
     num:
-      - age
-      - revenu_mensuel
-      - annees_dans_l_entreprise
-      - annees_dans_le_poste_actuel
-      - distance_domicile_travail
-      - satisfaction_global
-      - niveau_hierarchique_poste
-      - salary_vs_level
-      - experience_mismatch
-      - promotion_speed
-      - delta_evaluation
-      - is_low_salary_for_job
-      - stagnation_flag
-      - career_frustration
-      - grey_zone_employee
-      - fn_risk_profile
-      - consulting_risk
-      - married_fn_risk
-      - tech_fn_risk
-      - travel_fn_risk
-      - categorical_fn_profile
-      - senior_frustration
-      - tech_stagnation
-      - consulting_travel_risk
+    - age
+    - revenu_mensuel
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - distance_domicile_travail
+    - satisfaction_global
+    - niveau_hierarchique_poste
+    - niveau_education
+    - salary_vs_level
+    - experience_mismatch
+    - promotion_speed
+    - delta_evaluation
+    - is_low_salary_for_job
+    - stagnation_flag
+    - career_frustration
+    - grey_zone_employee
+    - fn_risk_profile
+    - consulting_risk
+    - married_fn_risk
+    - tech_fn_risk
+    - travel_fn_risk
+    - categorical_fn_profile
+    - senior_frustration
+    - tech_stagnation
+    - consulting_travel_risk
     cat:
-      - statut_marital
-      - departement
-      - poste
-      - domaine_etude
-      - frequence_deplacement
-      - age_bucket
-      - revenu_bin
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+    - revenu_bin
+  fe_business:
+    num:
+    - age
+    - revenu_mensuel
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - distance_domicile_travail
+    - satisfaction_global
+    - niveau_hierarchique_poste
+    - salary_vs_level
+    - experience_mismatch
+    - promotion_speed
+    - promotion_delay
+    - delta_evaluation
+    - is_low_salary_for_job
+    - stagnation_flag
+    - long_commute
+    - career_frustration
+    - underpaid_senior
+    cat:
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+  fe_full_robust:
+    num:
+    - age
+    - revenu_mensuel
+    - nombre_experiences_precedentes
+    - annee_experience_totale
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - satisfaction_employee_environnement
+    - satisfaction_employee_nature_travail
+    - satisfaction_employee_equipe
+    - satisfaction_employee_equilibre_pro_perso
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - heure_supplementaires
+    - augementation_salaire_precedente
+    - nombre_participation_pee
+    - nb_formations_suivies
+    - distance_domicile_travail
+    - niveau_education
+    - annees_depuis_la_derniere_promotion
+    - annes_sous_responsable_actuel
+    - salary_vs_level
+    - experience_mismatch
+    - promotion_speed
+    - promotion_delay
+    - delta_evaluation
+    - is_low_salary_for_job
+    - stagnation_flag
+    - long_commute
+    - mid_level
+    - grey_zone_employee
+    - career_frustration
+    - underpaid_senior
+    - fn_risk_profile
+    - consulting_risk
+    - married_fn_risk
+    - tech_fn_risk
+    - travel_fn_risk
+    - categorical_fn_profile
+    - senior_frustration
+    - tech_stagnation
+    - consulting_travel_risk
+    cat:
+    - genre
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+    - revenu_bin
+  fe_linear_clean:
+    num:
+    - age
+    - revenu_mensuel
+    - annee_experience_totale
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - distance_domicile_travail
+    - satisfaction_global
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - salary_vs_level
+    - experience_mismatch
+    - promotion_speed
+    - delta_evaluation
+    - is_low_salary_for_job
+    - stagnation_flag
+    - long_commute
+    cat:
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+  fe_silent_attrition_v1:
+    num:
+    - age
+    - revenu_mensuel
+    - nombre_experiences_precedentes
+    - annee_experience_totale
+    - annees_dans_l_entreprise
+    - annees_dans_le_poste_actuel
+    - satisfaction_employee_environnement
+    - satisfaction_employee_nature_travail
+    - satisfaction_employee_equipe
+    - satisfaction_employee_equilibre_pro_perso
+    - note_evaluation_precedente
+    - note_evaluation_actuelle
+    - niveau_hierarchique_poste
+    - heure_supplementaires
+    - augementation_salaire_precedente
+    - nombre_participation_pee
+    - nb_formations_suivies
+    - distance_domicile_travail
+    - niveau_education
+    - annees_depuis_la_derniere_promotion
+    - annes_sous_responsable_actuel
+    - salary_vs_level
+    - experience_mismatch
+    - promotion_speed
+    - promotion_delay
+    - delta_evaluation
+    - is_low_salary_for_job
+    - stagnation_flag
+    - long_commute
+    - mid_level
+    - salary_gap_vs_poste_median
+    - satisfaction_gap_vs_poste_mean
+    - promo_delay_vs_poste_median
+    - role_stagnation_ratio
+    - senior_plateau_flag
+    - consulting_hidden_attrition
+    - assistant_direction_hidden_attrition
+    - techlead_hidden_attrition
+    - training_gap_vs_department_median
+    - low_training_vs_department
+    - pee_disengagement_flag
+    cat:
+    - genre
+    - statut_marital
+    - departement
+    - poste
+    - domaine_etude
+    - frequence_deplacement
+    - age_bucket
+    - revenu_bin
+final_model_feature_set: raw_baseline
+benchmark_feature_sets:
+- raw_baseline
+- raw_baseline_reduc
+- fe_core
+- fe_compact
+- fe_fn_focus
+- fe_full_robust
+notes:
+  raw_baseline: Feature set retenu par le modele final LightGBM.
+  fe_silent_attrition_v1: Feature set issu de l analyse des erreurs, conserve pour
+    documentation et comparaisons.
