@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import os
 import warnings
 from pathlib import Path
 import sys
@@ -14,18 +12,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
 from models.logistic_regression_model import build_elastic_net_logistic_regression_pipeline
-from models.lightgbm_model import build_lightgbm_pipeline, get_lightgbm_param_distributions
-from models.random_forest_model import (
-    build_random_forest_pipeline,
-    get_random_forest_param_distributions,
-)
-from models.svc_model import build_svc_pipeline, get_svc_param_distributions
-from models.xgboost_model import build_xgboost_pipeline, get_xgboost_param_distributions
+from models.xgboost_model import build_xgboost_pipeline
 from src.data.preprocessing import build_preprocessor, filter_existing_features
 from src.data.split_data import make_train_test_split
 from src.features.feature_engineering import make_feature_engineering
 from src.features.features_selection import DROP_COLUMNS, TARGET, get_feature_set
-from src.modeling.train import train_model_with_randomized_search
 
 warnings.filterwarnings(
     "ignore",
@@ -37,54 +28,61 @@ SEED = 51
 TEST_SIZE = 0.2
 OUTPUT_DIR = PROJECT_ROOT / "data" / "processed"
 TOP_K_CONTRIBUTORS = 3
-SCORING_METRIC = "average_precision"
-TUNING_N_ITER = int(os.getenv("ERROR_ANALYSIS_N_ITER", "20"))
-TUNING_CV_FOLDS = int(os.getenv("ERROR_ANALYSIS_CV_FOLDS", "5"))
-TUNING_N_JOBS = int(os.getenv("ERROR_ANALYSIS_N_JOBS", "4"))
-SELECTED_CANDIDATES = {
-    name.strip()
-    for name in os.getenv("ERROR_ANALYSIS_CANDIDATES", "").split(",")
-    if name.strip()
-}
-OUTPUT_TAG = os.getenv("ERROR_ANALYSIS_OUTPUT_TAG", "new_run")
 
-# Trois candidats représentatifs du nouveau run :
-# - SVC : compromis stable / peu d'overfit sur fe_full_robust
-# - LightGBM : challenger performant en ranking sur raw_baseline
-# - Random Forest : meilleur AP test, mais à challenger sur ses erreurs et son overfit
 CANDIDATES = [
     {
-        "short_name": "svc_full",
-        "candidate_name": "best_svc_fe_full_robust",
-        "feature_set": "fe_full_robust",
-        "model_key": "svc",
-        "sampling_method": "borderline",
-        "threshold": 0.445073,
+        "short_name": "en_core",
+        "candidate_name": "elastic_net_fe_core_smote",
+        "feature_set": "fe_core",
+        "model_key": "elastic_net",
+        "sampling_method": "smote",
+        "threshold": 0.324378,
         "threshold_label": "seuil_cv_opt_prc",
         "use_gpu": False,
-        "use_tuning": True,
+        "params": {
+            "model__C": 0.1,
+            "model__class_weight": None,
+            "model__l1_ratio": 0.95,
+            "model__max_iter": 5000,
+        },
     },
     {
-        "short_name": "lgbm_raw",
-        "candidate_name": "best_lightgbm_raw_baseline",
+        "short_name": "en_full",
+        "candidate_name": "elastic_net_fe_full_robust_borderline",
+        "feature_set": "fe_full_robust",
+        "model_key": "elastic_net",
+        "sampling_method": "borderline",
+        "threshold": 0.231638,
+        "threshold_label": "cv_recall_cible_0.7",
+        "use_gpu": False,
+        "params": {
+            "model__C": 0.03,
+            "model__class_weight": None,
+            "model__l1_ratio": 0.05,
+            "model__max_iter": 5000,
+        },
+    },
+    {
+        "short_name": "xgb_raw",
+        "candidate_name": "xgboost_raw_baseline_smote",
         "feature_set": "raw_baseline",
-        "model_key": "lightgbm",
-        "sampling_method": "borderline",
-        "threshold": 0.211717,
+        "model_key": "xgboost",
+        "sampling_method": "smote",
+        "threshold": 0.306442,
         "threshold_label": "seuil_cv_opt_prc",
-        "use_gpu": False,
-        "use_tuning": True,
-    },
-    {
-        "short_name": "rf_full",
-        "candidate_name": "best_random_forest_fe_full_robust",
-        "feature_set": "fe_full_robust",
-        "model_key": "random_forest",
-        "sampling_method": "borderline",
-        "threshold": 0.254948,
-        "threshold_label": "seuil_cv_opt_prc",
-        "use_gpu": False,
-        "use_tuning": True,
+        "use_gpu": True,
+        "params": {
+            "model__colsample_bytree": 0.85,
+            "model__gamma": 0.7,
+            "model__learning_rate": 0.03,
+            "model__max_depth": 3,
+            "model__min_child_weight": 4,
+            "model__n_estimators": 500,
+            "model__reg_alpha": 0.001,
+            "model__reg_lambda": 1.0,
+            "model__scale_pos_weight": 1.0,
+            "model__subsample": 0.85,
+        },
     },
 ]
 
@@ -155,140 +153,40 @@ def prepare_dataset(data_path: Path, feature_set_name: str):
     }
 
 
-def build_base_candidate_model(candidate: dict, preprocessor):
-    params = candidate.get("params", {})
-    sampling_method = candidate["sampling_method"]
-    model_n_jobs = 1 if candidate.get("use_tuning", False) else TUNING_N_JOBS
+def build_candidate_model(candidate: dict, preprocessor):
+    params = candidate["params"]
 
     if candidate["model_key"] == "elastic_net":
         return build_elastic_net_logistic_regression_pipeline(
             preprocessor=preprocessor,
             random_state=SEED,
-            sampling_method=sampling_method,
-            C=params.get("model__C", 1.0),
-            l1_ratio=params.get("model__l1_ratio", 0.5),
-            class_weight=params.get("model__class_weight", "balanced"),
-            max_iter=params.get("model__max_iter", 5000),
+            sampling_method=candidate["sampling_method"],
+            C=params["model__C"],
+            l1_ratio=params["model__l1_ratio"],
+            class_weight=params["model__class_weight"],
+            max_iter=params["model__max_iter"],
         )
 
     if candidate["model_key"] == "xgboost":
         return build_xgboost_pipeline(
             preprocessor=preprocessor,
             random_state=SEED,
-            sampling_method=sampling_method,
-            n_estimators=params.get("model__n_estimators", 300),
-            max_depth=params.get("model__max_depth", 3),
-            learning_rate=params.get("model__learning_rate", 0.05),
-            subsample=params.get("model__subsample", 0.8),
-            colsample_bytree=params.get("model__colsample_bytree", 0.8),
-            min_child_weight=params.get("model__min_child_weight", 1),
-            gamma=params.get("model__gamma", 0.0),
-            reg_alpha=params.get("model__reg_alpha", 0.0),
-            reg_lambda=params.get("model__reg_lambda", 1.0),
-            scale_pos_weight=params.get("model__scale_pos_weight", 1.0),
-            use_gpu=candidate.get("use_gpu", False),
-            n_jobs=model_n_jobs,
-        )
-
-    if candidate["model_key"] == "lightgbm":
-        return build_lightgbm_pipeline(
-            preprocessor=preprocessor,
-            random_state=SEED,
-            sampling_method=sampling_method,
-            n_jobs=model_n_jobs,
-        )
-
-    if candidate["model_key"] == "random_forest":
-        return build_random_forest_pipeline(
-            preprocessor=preprocessor,
-            random_state=SEED,
-            sampling_method=sampling_method,
-            n_jobs=model_n_jobs,
-        )
-
-    if candidate["model_key"] == "svc":
-        return build_svc_pipeline(
-            preprocessor=preprocessor,
-            random_state=SEED,
-            sampling_method=sampling_method,
-            probability=True,
+            sampling_method=candidate["sampling_method"],
+            n_estimators=params["model__n_estimators"],
+            max_depth=params["model__max_depth"],
+            learning_rate=params["model__learning_rate"],
+            subsample=params["model__subsample"],
+            colsample_bytree=params["model__colsample_bytree"],
+            min_child_weight=params["model__min_child_weight"],
+            gamma=params["model__gamma"],
+            reg_alpha=params["model__reg_alpha"],
+            reg_lambda=params["model__reg_lambda"],
+            scale_pos_weight=params["model__scale_pos_weight"],
+            use_gpu=candidate["use_gpu"],
+            n_jobs=-1,
         )
 
     raise ValueError(f"model_key non supporte: {candidate['model_key']}")
-
-
-def get_candidate_param_distributions(candidate: dict) -> dict:
-    if candidate["model_key"] == "xgboost":
-        return get_xgboost_param_distributions()
-    if candidate["model_key"] == "lightgbm":
-        return get_lightgbm_param_distributions()
-    if candidate["model_key"] == "random_forest":
-        return get_random_forest_param_distributions()
-    if candidate["model_key"] == "svc":
-        return get_svc_param_distributions()
-    raise ValueError(
-        f"Pas de distributions de tuning pour model_key={candidate['model_key']}"
-    )
-
-
-def get_active_candidates() -> list[dict]:
-    if not SELECTED_CANDIDATES:
-        return CANDIDATES
-
-    known_names = {
-        name
-        for candidate in CANDIDATES
-        for name in [candidate["short_name"], candidate["candidate_name"]]
-    }
-    unknown_names = SELECTED_CANDIDATES - known_names
-    if unknown_names:
-        raise ValueError(
-            "Candidat(s) inconnu(s) dans ERROR_ANALYSIS_CANDIDATES : "
-            f"{sorted(unknown_names)}. Valeurs possibles : {sorted(known_names)}"
-        )
-
-    return [
-        candidate
-        for candidate in CANDIDATES
-        if candidate["short_name"] in SELECTED_CANDIDATES
-        or candidate["candidate_name"] in SELECTED_CANDIDATES
-    ]
-
-
-def build_candidate_model(candidate: dict, prepared: dict):
-    model = build_base_candidate_model(candidate, prepared["preprocessor"])
-
-    if not candidate.get("use_tuning", False):
-        model.fit(prepared["X_train"], prepared["y_train"])
-        return model, {
-            "already_tuned": False,
-            "best_cv_score": np.nan,
-            "best_params": candidate.get("params", {}),
-        }
-
-    print(
-        f"  Tuning {candidate['candidate_name']} "
-        f"({TUNING_N_ITER} candidats, {TUNING_CV_FOLDS} folds, scoring={SCORING_METRIC})..."
-    )
-    search = train_model_with_randomized_search(
-        model=model,
-        X_train=prepared["X_train"],
-        y_train=prepared["y_train"],
-        param_distributions=get_candidate_param_distributions(candidate),
-        n_iter=TUNING_N_ITER,
-        scoring=SCORING_METRIC,
-        cv=TUNING_CV_FOLDS,
-        n_jobs=TUNING_N_JOBS,
-        refit=True,
-        verbose=1,
-        random_state=SEED,
-    )
-
-    return search.best_estimator_, {
-        "already_tuned": True,
-        "best_cv_score": float(search.best_score_),
-        "best_params": search.best_params_,
-    }
 
 
 def build_numeric_bounds(df: pd.DataFrame) -> dict:
@@ -477,30 +375,39 @@ def attach_linear_contributions(rows_df: pd.DataFrame, model, X_eval: pd.DataFra
     return rows_df
 
 
-def build_rows_analysis(candidate: dict, prepared: dict) -> tuple[pd.DataFrame, dict]:
+def build_rows_analysis(candidate: dict, prepared: dict) -> pd.DataFrame:
     """
-    Construit l'analyse ligne par ligne pour un candidat.
+    Expliquer localement pourquoi Elastic Net a donné une proba élevée ou faible à une ligne.
 
-    Pour chaque salarié du test, on stocke :
-        - la vérité terrain et la décision du modèle ;
-        - la probabilité estimée de départ ;
-        - la marge au seuil retenu ;
-        - les flags de qualité / anomalie data ;
-        - les variables métier de la ligne.
+    Concrètement :
+        - Elle récupère le préprocesseur prep (smote, borerline) et le modèle linéaire model dans le pipeline.
+        - Elle transforme X_eval avec prep.transform(...). Important : on travaille donc sur les variables après preprocessing
+            variables numériques imputées / scalées
+            catégories one-hot encodées
+            variables ordinales encodées
+        - Elle récupère les noms des features transformées avec prep.get_feature_names_out().
+        - Elle récupère les coefficients du modèle linéaire : coef_ et intercept_
+        - Elle calcule, pour chaque ligne et pour chaque feature transformée :
+            - contribution = valeur_transformee * coefficient
+        - Elle somme toutes les contributions et ajoute l’intercept : ça donne le logit_score (donc pas directement une probabilité, mais le score avant la sigmoïde)
+        - Elle extrait ensuite :
+            - les top_positive_contributors (Ce sont les features qui poussent le plus la prédiction vers la classe positive, donc vers “départ”.)
+            - les top_negative_contributors (Ce sont les features qui poussent le plus vers la classe négative, donc vers “reste”.)
     """
+    X_train = prepared["X_train"]
     X_test = prepared["X_test"]
+    y_train = prepared["y_train"]
     y_test = prepared["y_test"]
     model_train_rows = prepared["model_train_rows"]
     model_test_rows = prepared["model_test_rows"]
     source_test_rows = prepared["source_test_rows"]
 
-    model, model_metadata = build_candidate_model(candidate, prepared)
+    model = build_candidate_model(candidate, prepared["preprocessor"])
+    model.fit(X_train, y_train)
 
     y_proba = model.predict_proba(X_test)[:, 1]
     y_pred = (y_proba >= candidate["threshold"]).astype(int)
-    proba_by_index = pd.Series(y_proba, index=X_test.index)
-    pred_by_index = pd.Series(y_pred, index=X_test.index)
-    proba_rank_pct = proba_by_index.rank(pct=True, method="average")
+    proba_rank_pct = pd.Series(y_proba, index=X_test.index).rank(pct=True, method="average")
 
     numeric_bounds = build_numeric_bounds(model_train_rows)
     rare_reference = build_rare_category_reference(model_train_rows)
@@ -510,17 +417,17 @@ def build_rows_analysis(candidate: dict, prepared: dict) -> tuple[pd.DataFrame, 
         engineered_row = model_test_rows.loc[idx]
         source_row = source_test_rows.loc[idx]
         true_value = int(y_test.loc[idx])
-        pred_value = int(pred_by_index.loc[idx])
-        proba_value = float(proba_by_index.loc[idx])
+        pred_value = int(y_pred[list(X_test.index).index(idx)])
+        proba_value = float(y_proba[list(X_test.index).index(idx)])
         error_type = classify_error_type(true_value, pred_value)
-        numeric_flags = get_numeric_outlier_flags(engineered_row, numeric_bounds) # liste des variables numériques atypiques pour cette ligne
-        rare_flags = get_rare_category_flags(engineered_row, rare_reference) # liste des modalités catégorielles rares présentes sur cette ligne
-        rule_flags = get_rule_issue_flags(engineered_row) # liste des incohérences métier détectées par règles simples.
-        feature_missing_count = int(X_test.loc[idx].isna().sum()) # 
-        abs_margin = abs(proba_value - candidate["threshold"]) # Distance entre le probabilité prédite et le seuil de décision
-        tail_error = ( # Identifie les erreurs situées dans les extrêmes du clazssements des proba
-            (error_type == "FP" and proba_rank_pct.loc[idx] >= 0.90) # la personne est dans les 10 % avec les probabilités de départ les plus élevées
-            or (error_type == "FN" and proba_rank_pct.loc[idx] <= 0.10) # la personne est dans les 10 % avec les probabilités de départ les plus faibles.
+        numeric_flags = get_numeric_outlier_flags(engineered_row, numeric_bounds)
+        rare_flags = get_rare_category_flags(engineered_row, rare_reference)
+        rule_flags = get_rule_issue_flags(engineered_row)
+        feature_missing_count = int(X_test.loc[idx].isna().sum())
+        abs_margin = abs(proba_value - candidate["threshold"])
+        tail_error = (
+            (error_type == "FP" and proba_rank_pct.loc[idx] >= 0.90)
+            or (error_type == "FN" and proba_rank_pct.loc[idx] <= 0.10)
         )
         confident_error = (error_type in {"FP", "FN"}) and (
             tail_error or abs_margin >= 0.20
@@ -572,10 +479,10 @@ def build_rows_analysis(candidate: dict, prepared: dict) -> tuple[pd.DataFrame, 
         x_eval_sorted = X_test.loc[rows_df["row_index"]]
         rows_df = attach_linear_contributions(rows_df, model=model, X_eval=x_eval_sorted)
 
-    return rows_df, model_metadata
+    return rows_df
 
 
-def build_candidate_summary(candidate: dict, rows_df: pd.DataFrame, model_metadata: dict) -> pd.DataFrame:
+def build_candidate_summary(candidate: dict, rows_df: pd.DataFrame) -> pd.DataFrame:
     y_true = rows_df["y_true"].to_numpy()
     y_pred = rows_df["y_pred"].to_numpy()
     y_proba = rows_df["y_proba"].to_numpy()
@@ -585,8 +492,6 @@ def build_candidate_summary(candidate: dict, rows_df: pd.DataFrame, model_metada
         "feature_set": candidate["feature_set"],
         "threshold_label": candidate["threshold_label"],
         "threshold": candidate["threshold"],
-        "best_cv_score": model_metadata.get("best_cv_score"),
-        "best_params_json": json.dumps(model_metadata.get("best_params", {}), ensure_ascii=False),
         "n_test": len(rows_df),
         "precision_1": precision_score(y_true, y_pred, zero_division=0),
         "recall_1": recall_score(y_true, y_pred, zero_division=0),
@@ -688,129 +593,19 @@ def select_export_columns(rows_df: pd.DataFrame) -> list[str]:
     return [column for column in priority_columns if column in rows_df.columns] + remaining_columns
 
 
-def build_error_matrix(candidate_results: dict[str, dict[str, pd.DataFrame]]) -> pd.DataFrame:
-    error_matrix = None
-
-    for short_name, blocks in candidate_results.items():
-        rows = blocks["rows"]
-        base_columns = ["row_index", "y_true"]
-        for identifier in IDENTIFIER_COLUMNS:
-            if identifier in rows.columns and identifier not in base_columns:
-                base_columns.append(identifier)
-
-        cols = base_columns + [
-            "y_pred",
-            "y_proba",
-            "error_type",
-            "is_error",
-            "is_confident_error",
-            "possible_data_issue",
-            "anomaly_score",
-        ]
-        candidate_matrix = rows[[col for col in cols if col in rows.columns]].copy()
-        candidate_matrix = candidate_matrix.rename(
-            columns={
-                "y_pred": f"{short_name}_pred",
-                "y_proba": f"{short_name}_proba",
-                "error_type": f"{short_name}_error_type",
-                "is_error": f"{short_name}_is_error",
-                "is_confident_error": f"{short_name}_is_confident_error",
-                "possible_data_issue": f"{short_name}_possible_data_issue",
-                "anomaly_score": f"{short_name}_anomaly_score",
-            }
-        )
-
-        if error_matrix is None:
-            error_matrix = candidate_matrix
-        else:
-            join_cols = ["row_index"]
-            duplicate_base_columns = [col for col in base_columns if col != "row_index"]
-            error_matrix = error_matrix.merge(
-                candidate_matrix.drop(columns=duplicate_base_columns, errors="ignore"),
-                on=join_cols,
-                how="outer",
-            )
-
-    if error_matrix is None:
-        return pd.DataFrame()
-
-    error_cols = [col for col in error_matrix.columns if col.endswith("_is_error")]
-    pred_cols = [col for col in error_matrix.columns if col.endswith("_pred")]
-    confident_cols = [col for col in error_matrix.columns if col.endswith("_is_confident_error")]
-
-    error_matrix["n_models_error"] = error_matrix[error_cols].sum(axis=1)
-    error_matrix["n_models_predict_depart"] = error_matrix[pred_cols].sum(axis=1)
-    error_matrix["n_models_confident_error"] = error_matrix[confident_cols].sum(axis=1)
-
-    error_type_cols = [col for col in error_matrix.columns if col.endswith("_error_type")]
-    error_matrix["error_pattern"] = error_matrix[error_type_cols].apply(
-        lambda row: " | ".join(f"{col.replace('_error_type', '')}:{row[col]}" for col in error_type_cols),
-        axis=1,
-    )
-
-    return error_matrix.sort_values(
-        ["n_models_error", "n_models_confident_error"],
-        ascending=[False, False],
-    ).reset_index(drop=True)
-
-
-def build_error_overlap_summary(error_matrix: pd.DataFrame) -> pd.DataFrame:
-    if error_matrix.empty:
-        return pd.DataFrame()
-
-    error_cols = [col for col in error_matrix.columns if col.endswith("_is_error")]
-    records = []
-
-    records.append(
-        {
-            "scope": "all_models",
-            "n_rows": len(error_matrix),
-            "n_any_model_error": int((error_matrix["n_models_error"] > 0).sum()),
-            "n_all_models_error": int((error_matrix["n_models_error"] == len(error_cols)).sum()),
-            "n_no_model_error": int((error_matrix["n_models_error"] == 0).sum()),
-        }
-    )
-
-    for error_col in error_cols:
-        short_name = error_col.removesuffix("_is_error")
-        other_cols = [col for col in error_cols if col != error_col]
-        records.append(
-            {
-                "scope": short_name,
-                "n_rows": len(error_matrix),
-                "n_any_model_error": int((error_matrix["n_models_error"] > 0).sum()),
-                "n_all_models_error": int((error_matrix["n_models_error"] == len(error_cols)).sum()),
-                "n_no_model_error": int((error_matrix["n_models_error"] == 0).sum()),
-                "n_model_errors": int(error_matrix[error_col].sum()),
-                "n_unique_model_errors": int(
-                    ((error_matrix[error_col] == 1) & (error_matrix[other_cols].sum(axis=1) == 0)).sum()
-                ),
-                "n_shared_with_at_least_one_other": int(
-                    ((error_matrix[error_col] == 1) & (error_matrix[other_cols].sum(axis=1) > 0)).sum()
-                ),
-            }
-        )
-
-    return pd.DataFrame(records)
-
-
 def export_error_analysis(
     overview_df: pd.DataFrame,
     summary_df: pd.DataFrame,
     flag_df: pd.DataFrame,
-    error_overlap_df: pd.DataFrame,
-    error_matrix_df: pd.DataFrame,
     candidate_results: dict[str, dict[str, pd.DataFrame]],
 ) -> Path:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = OUTPUT_DIR / f"{pd.Timestamp.now().strftime('%y%m%d')}-error_analysis_{OUTPUT_TAG}.xlsx"
+    output_path = OUTPUT_DIR / f"{pd.Timestamp.now().strftime('%y%m%d')}-error_analysis.xlsx"
 
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         overview_df.to_excel(writer, sheet_name="overview", index=False)
         summary_df.to_excel(writer, sheet_name="candidate_summary", index=False)
         flag_df.to_excel(writer, sheet_name="flag_summary", index=False)
-        error_overlap_df.to_excel(writer, sheet_name="error_overlap", index=False)
-        error_matrix_df.to_excel(writer, sheet_name="error_matrix", index=False)
 
         for short_name, blocks in candidate_results.items():
             blocks["rows"].to_excel(writer, sheet_name=f"{short_name}_rows", index=False)
@@ -823,7 +618,6 @@ def export_error_analysis(
 
 def main():
     data_path = PROJECT_ROOT / "data" / "interim" / "data_eda.csv"
-    active_candidates = get_active_candidates()
 
     overview_rows = []
     summary_blocks = []
@@ -832,15 +626,10 @@ def main():
     prepared_cache: dict[str, dict] = {}
 
     print("\n=== ERROR ANALYSIS CONFIG ===")
-    print(f"CANDIDATES      : {[candidate['candidate_name'] for candidate in active_candidates]}")
-    print(f"SCORING_METRIC  : {SCORING_METRIC}")
-    print(f"TUNING_N_ITER   : {TUNING_N_ITER}")
-    print(f"TUNING_CV_FOLDS : {TUNING_CV_FOLDS}")
-    print(f"TUNING_N_JOBS   : {TUNING_N_JOBS}")
-    print(f"OUTPUT_TAG      : {OUTPUT_TAG}")
+    print(f"CANDIDATES : {[candidate['candidate_name'] for candidate in CANDIDATES]}")
     print()
 
-    for candidate in active_candidates:
+    for candidate in CANDIDATES:
         feature_set = candidate["feature_set"]
         if feature_set not in prepared_cache:
             prepared_cache[feature_set] = prepare_dataset(
@@ -854,10 +643,10 @@ def main():
         print(f"THRESHOLD     : {candidate['threshold']} ({candidate['threshold_label']})")
         print("=" * 80)
 
-        rows_df, model_metadata = build_rows_analysis(candidate=candidate, prepared=prepared_cache[feature_set])
+        rows_df = build_rows_analysis(candidate=candidate, prepared=prepared_cache[feature_set])
         rows_df = rows_df[select_export_columns(rows_df)]
 
-        summary_df = build_candidate_summary(candidate=candidate, rows_df=rows_df, model_metadata=model_metadata)
+        summary_df = build_candidate_summary(candidate=candidate, rows_df=rows_df)
         flags_df = build_flag_summary(candidate=candidate, rows_df=rows_df)
 
         extreme_df = rows_df[
@@ -895,9 +684,6 @@ def main():
                 "model_key": candidate["model_key"],
                 "sampling_method": candidate["sampling_method"],
                 "uses_gpu": candidate["use_gpu"],
-                "use_tuning": candidate.get("use_tuning", False),
-                "best_cv_score": model_metadata.get("best_cv_score"),
-                "best_params_json": json.dumps(model_metadata.get("best_params", {}), ensure_ascii=False),
             }
         )
 
@@ -907,15 +693,10 @@ def main():
     summary_df = pd.concat(summary_blocks, ignore_index=True)
     flag_df = pd.concat(flag_blocks, ignore_index=True)
 
-    error_matrix_df = build_error_matrix(candidate_results)
-    error_overlap_df = build_error_overlap_summary(error_matrix_df)
-
     output_path = export_error_analysis(
         overview_df=overview_df,
         summary_df=summary_df,
         flag_df=flag_df,
-        error_overlap_df=error_overlap_df,
-        error_matrix_df=error_matrix_df,
         candidate_results=candidate_results,
     )
 

@@ -389,7 +389,7 @@ def build_rows_analysis(candidate: dict, prepared: dict) -> pd.DataFrame:
         abs_margin = abs(proba_value - candidate["threshold"])
         tail_error = (
             (error_type == "FP" and proba_rank_pct.loc[idx] >= 0.90)
-            or (error_type == "FN" and proba_rank_pct.loc[idx] <= 0.10)
+            or (error_type == "FN" and proba_rank_pct.loc[idx] <= 0.10) 
         )
         confident_error = (error_type in {"FP", "FN"}) and (
             tail_error or abs_margin >= 0.20

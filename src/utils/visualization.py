@@ -3,12 +3,12 @@ import seaborn as sns
 import pandas as pd
 import math
 from pathlib import Path
-from matplotlib.ticker import PercentFormatter
+from matplotlib.ticker import PercentFormatter, FuncFormatter, NullFormatter
 
 
-#************************
-#* Analyse exploratoire *
-#************************
+#*********************
+#* Analyse bivariée  *
+#*********************
 
 # ? ======  MODALITES NUMERIQUES ======
 
@@ -62,7 +62,7 @@ def plot_attrition_by_num(
 
     # Axes
     ax.set_ylabel("Taux d’attrition", fontsize=11)
-    ax.set_xlabel("")
+    ax.set_xlabel(f"{pretty_col}")
     ax.yaxis.set_major_formatter(PercentFormatter(1))
     ax.tick_params(axis="x", labelsize=11)
     ax.tick_params(axis="y", labelsize=10)
@@ -160,10 +160,10 @@ def plot_attrition_by_cat(
         # height=0.75,
     )
 
-    pretty_col = col.replace("_", " ")#.capitalize()
+    pretty_col = col.replace("_", " ").capitalize()
     ax.set_title(f"Taux d’attrition selon {pretty_col}", fontsize=16, weight="bold", pad=12)
     ax.set_xlabel("Taux d’attrition", fontsize=11)
-    ax.set_ylabel("")
+    ax.set_ylabel(f"{pretty_col}")
     ax.xaxis.set_major_formatter(PercentFormatter(1))
 
     ax.grid(axis="x", linestyle="--", alpha=0.3)
@@ -209,6 +209,181 @@ color_palette = {
     "false_positive": "blue",
     "false_negative": "orange",
 }
+
+#************************
+#* Analyse multivariée  *
+#************************
+
+#? PROFILS COMBINES
+
+def plot_attrition_heatmaps_ppt(df_multivar, target="a_quitte_l_entreprise"):
+    sns.set_theme(style="white")
+
+    fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+    # -------- Heatmap 1 : revenu x satisfaction --------
+    revenu_order = ["revenu_bas", "revenu_moyen", "revenu_haut"]
+    satisfaction_order = [
+        "satisfaction_basse",
+        "satisfaction_moyenne",
+        "satisfaction_haute",
+    ]
+
+    revenu_satisfaction_heatmap = (
+        df_multivar
+        .groupby(["revenu_bin_eda", "satisfaction_bin_eda"], observed=True)[target]
+        .mean()
+        .mul(100)
+        .unstack()
+        .reindex(index=revenu_order, columns=satisfaction_order)
+    )
+
+    sns.heatmap(
+        revenu_satisfaction_heatmap,
+        annot=True,
+        fmt=".1f",
+        cmap=sns.light_palette("#d5b5f5", as_cmap=True),
+        linewidths=1,
+        linecolor="white",
+        cbar_kws={"label": "Taux d'attrition (%)", "shrink": 0.85},
+        annot_kws={"fontsize": 11, "weight": "bold", "color": "#333333"},
+        ax=axes[0],
+    )
+
+    axes[0].set_title(
+        "Attrition selon le revenu et la satisfaction",
+        fontsize=15,
+        weight="bold",
+        pad=14,
+    )
+    axes[0].set_xlabel("Satisfaction globale", fontsize=11)
+    axes[0].set_ylabel("Revenu mensuel", fontsize=11)
+    axes[0].set_xticklabels(
+        ["Basse", "Moyenne", "Haute"],
+        rotation=0,
+        fontsize=10,
+    )
+    axes[0].set_yticklabels(
+        ["Bas", "Moyen", "Haut"],
+        rotation=0,
+        fontsize=10,
+    )
+
+    # -------- Heatmap 2 : poste x déplacements --------
+    poste_travel_heatmap = (
+        df_multivar
+        .groupby(["poste", "frequence_deplacement"], observed=True)[target]
+        .mean()
+        .mul(100)
+        .unstack()
+    )
+
+    # Trier les postes par attrition moyenne pour une lecture plus claire
+    poste_order = poste_travel_heatmap.mean(axis=1).sort_values().index
+    poste_travel_heatmap = poste_travel_heatmap.loc[poste_order]
+
+    sns.heatmap(
+        poste_travel_heatmap,
+        annot=True,
+        fmt=".1f",
+        cmap=sns.light_palette("#a7deb7", as_cmap=True),
+        linewidths=1,
+        linecolor="white",
+        cbar_kws={"label": "Taux d'attrition (%)", "shrink": 0.85},
+        annot_kws={"fontsize": 10, "weight": "bold", "color": "#333333"},
+        ax=axes[1],
+    )
+
+    axes[1].set_title(
+        "Attrition selon le poste et les déplacements",
+        fontsize=15,
+        weight="bold",
+        pad=14,
+    )
+    axes[1].set_xlabel("Fréquence de déplacement", fontsize=11)
+    axes[1].set_ylabel("Poste", fontsize=11)
+    axes[1].tick_params(axis="x", rotation=0, labelsize=10)
+    axes[1].tick_params(axis="y", labelsize=9)
+
+    plt.tight_layout()
+    plt.show()
+
+#? Analyse des odds ratios
+
+def plot_odds_ratios_ppt(or_plot):
+    plot_df = or_plot.sort_values("odds_ratio", ascending=True).copy()
+
+    palette = {
+        "Association négative avec l'attrition": "#d5b5f5",
+        "Association positive avec l'attrition": "#a7deb7",
+    }
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    sns.barplot(
+        data=plot_df,
+        x="odds_ratio",
+        y="feature_label",
+        hue="direction",
+        dodge=False,
+        palette=palette,
+        ax=ax,
+        edgecolor="0.25",
+        linewidth=0.8,
+    )
+
+    ax.axvline(1, color="#444444", linestyle="--", linewidth=1.3)
+    ax.set_xscale("log")
+
+    ax.set_title(
+        "Régression logistique exploratoire — Odds ratios",
+        fontsize=16,
+        weight="bold",
+        pad=14,
+    )
+    ax.set_xlabel("Odds ratio (échelle logarithmique)", fontsize=11)
+    ax.set_ylabel("Variables", fontsize=11)
+
+    ax.grid(axis="x", linestyle="--", alpha=0.25)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x:g}"))
+    ax.xaxis.set_minor_formatter(NullFormatter())
+
+    # annotations
+    for patch, val in zip(ax.patches, plot_df["odds_ratio"]):
+        y = patch.get_y() + patch.get_height() / 2
+        x = patch.get_width()
+
+        if val >= 1:
+            xpos = val * 1.03
+            ha = "left"
+        else:
+            xpos = val * 1.03
+            ha = "left"
+
+        ax.text(
+            xpos,
+            y,
+            f"{val:.2f}",
+            va="center",
+            ha=ha,
+            fontsize=9,
+            color="#333333"
+        )
+
+    handles, labels = ax.get_legend_handles_labels()
+    label_map = {
+        "hausse_risque": "Odds ratio > 1",
+        "baisse_risque": "Odds ratio < 1",
+    }
+    clean_labels = [label_map.get(l, l) for l in labels]
+    ax.legend(handles, clean_labels, title="", frameon=False, loc=0)
+
+    plt.tight_layout()
+    plt.show()
 
 #*******************************
 #* Analyse distribution modèle *

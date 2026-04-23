@@ -322,7 +322,7 @@ def export_global_results(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     safe_spec_mode = spec_mode.replace("+", "_plus_")
-    file_path = output_dir / f"benchmark_feature_sets__{safe_spec_mode}.xlsx"
+    file_path = output_dir / f"{pd.Timestamp.now().strftime('%y%m%d')}_benchmark_feature_sets__{safe_spec_mode}.xlsx"
 
     with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
         all_results.to_excel(writer, sheet_name="all_results", index=False)

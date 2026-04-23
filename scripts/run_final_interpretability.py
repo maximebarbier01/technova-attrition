@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import warnings
 from pathlib import Path
 
 import matplotlib
@@ -13,10 +14,16 @@ import pandas as pd
 import shap
 from sklearn.inspection import permutation_importance
 
+warnings.filterwarnings(
+    "ignore",
+    message=r"X does not have valid feature names.*",
+    category=UserWarning,
+)
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(PROJECT_ROOT))
 
-from models.logistic_regression_model import build_elastic_net_logistic_regression_pipeline
+from models.lightgbm_model import build_lightgbm_pipeline
 from src.data.preprocessing import build_preprocessor, filter_existing_features
 from src.data.split_data import make_train_test_split
 from src.features.feature_engineering import make_feature_engineering
@@ -32,25 +39,42 @@ TEST_SIZE = 0.2
 DATE_TAG = pd.Timestamp.now().strftime("%y%m%d")
 
 FINAL_MODEL = {
-    "candidate_name": "elastic_net_fe_silent_attrition_v1_smote",
-    "feature_set": "fe_silent_attrition_v1",
-    "sampling_method": "smote",
-    "threshold": 0.318754,
+    "candidate_name": "best_lightgbm_raw_baseline",
+    "feature_set": "raw_baseline",
+    "sampling_method": "borderline",
+    "threshold": 0.211717,
     "params": {
-        "C": 0.1,
-        "l1_ratio": 0.85,
+        "n_estimators": 700,
+        "learning_rate": 0.01,
+        "num_leaves": 63,
+        "max_depth": 5,
+        "min_child_samples": 20,
+        "subsample": 0.6,
+        "colsample_bytree": 0.6,
+        "reg_alpha": 0.01,
+        "reg_lambda": 0.5,
         "class_weight": None,
-        "max_iter": 5000,
     },
 }
+OUTPUT_PREFIX = f"{DATE_TAG}-final_lightgbm_raw_baseline"
 
 NUMERIC_DIAGNOSTIC_FEATURES = [
-    "satisfaction_global",
-    "promotion_delay",
+    "revenu_mensuel",
+    "age",
+    "distance_domicile_travail",
+    "annee_experience_totale",
+    "annees_dans_l_entreprise",
+    "annees_dans_le_poste_actuel",
+    "annees_depuis_la_derniere_promotion",
+    "satisfaction_employee_environnement",
+    "satisfaction_employee_nature_travail",
+    "satisfaction_employee_equipe",
+    "satisfaction_employee_equilibre_pro_perso",
     "note_evaluation_precedente",
-    "role_stagnation_ratio",
-    "salary_gap_vs_poste_median",
-    "training_gap_vs_department_median",
+    "note_evaluation_actuelle",
+    "niveau_hierarchique_poste",
+    "nb_formations_suivies",
+    "nombre_participation_pee",
 ]
 
 CATEGORICAL_DIAGNOSTIC_FEATURES = [
@@ -101,18 +125,26 @@ def prepare_dataset(
         "y_train": y_train,
         "y_test": y_test,
         "preprocessor": preprocessor,
+        "context_test_rows": df.loc[X_test.index].copy(),
     }
 
 
 def fit_final_model(preprocessor, X_train: pd.DataFrame, y_train: pd.Series):
-    model = build_elastic_net_logistic_regression_pipeline(
+    model = build_lightgbm_pipeline(
         preprocessor=preprocessor,
         random_state=SEED,
         sampling_method=FINAL_MODEL["sampling_method"],
-        C=FINAL_MODEL["params"]["C"],
-        l1_ratio=FINAL_MODEL["params"]["l1_ratio"],
+        n_estimators=FINAL_MODEL["params"]["n_estimators"],
+        learning_rate=FINAL_MODEL["params"]["learning_rate"],
+        num_leaves=FINAL_MODEL["params"]["num_leaves"],
+        max_depth=FINAL_MODEL["params"]["max_depth"],
+        min_child_samples=FINAL_MODEL["params"]["min_child_samples"],
+        subsample=FINAL_MODEL["params"]["subsample"],
+        colsample_bytree=FINAL_MODEL["params"]["colsample_bytree"],
+        reg_alpha=FINAL_MODEL["params"]["reg_alpha"],
+        reg_lambda=FINAL_MODEL["params"]["reg_lambda"],
         class_weight=FINAL_MODEL["params"]["class_weight"],
-        max_iter=FINAL_MODEL["params"]["max_iter"],
+        n_jobs=4,
     )
     model.fit(X_train, y_train)
     return model
@@ -122,11 +154,24 @@ def build_predictions_dataframe(
     model,
     X_test: pd.DataFrame,
     y_test: pd.Series,
+    context_test_rows: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     y_proba = model.predict_proba(X_test)[:, 1]
     y_pred = (y_proba >= FINAL_MODEL["threshold"]).astype(int)
 
     df = X_test.copy()
+    context_columns = [
+        "satisfaction_global",
+        "revenu_bin",
+        "age_bucket",
+        "salary_gap_vs_poste_median",
+        "satisfaction_gap_vs_poste_mean",
+        "role_stagnation_ratio",
+    ]
+    if context_test_rows is not None:
+        for column in context_columns:
+            if column in context_test_rows.columns and column not in df.columns:
+                df[column] = context_test_rows[column]
     df["y_true"] = y_test.values
     df["y_pred"] = y_pred
     df["y_proba"] = y_proba
@@ -188,12 +233,12 @@ def save_permutation_importance_plot(
         top["feature"],
         top["importance_mean"],
         xerr=top["importance_std"],
-        color="#356D65",
+        color="#FF857B",
         alpha=0.9,
     )
     ax.set_title("Permutation Importance - Modele final")
-    ax.set_xlabel("Baisse moyenne de l'average precision")
-    ax.set_ylabel("")
+    ax.set_xlabel("Contribution à la détection des départs")
+    ax.set_ylabel("Features")
     plt.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -225,14 +270,18 @@ def compute_shap_explanations(
     X_train_t: pd.DataFrame,
     X_test_t: pd.DataFrame,
 ):
-    linear_model = model.named_steps["model"]
-    background = shap.sample(
-        X_train_t,
-        min(200, len(X_train_t)),
-        random_state=SEED,
-    )
-    explainer = shap.LinearExplainer(linear_model, background)
+    tree_model = model.named_steps["model"]
+    explainer = shap.TreeExplainer(tree_model)
     shap_values = explainer(X_test_t)
+
+    if getattr(shap_values, "values", np.array([])).ndim == 3:
+        shap_values = shap.Explanation(
+            values=shap_values.values[:, :, 1],
+            base_values=shap_values.base_values[:, 1],
+            data=X_test_t.values,
+            feature_names=X_test_t.columns.tolist(),
+        )
+
     return shap_values
 
 
@@ -272,9 +321,15 @@ def get_case_indices(predictions_df: pd.DataFrame) -> dict[str, int]:
         .sort_values("y_proba", ascending=True)
         .index[0]
     )
+    fp_idx = (
+        predictions_df[predictions_df["error_type"] == "FP"]
+        .sort_values("y_proba", ascending=False)
+        .index[0]
+    )
     return {
         "tp_high_risk": tp_idx,
         "fn_silent_attrition": fn_idx,
+        "fp_extreme_alert": fp_idx,
     }
 
 
@@ -356,6 +411,7 @@ def main() -> None:
         model=model,
         X_test=prepared["X_test"],
         y_test=prepared["y_test"],
+        context_test_rows=prepared["context_test_rows"],
     )
 
     permutation_df = compute_permutation_importance(
@@ -363,8 +419,8 @@ def main() -> None:
         X_test=prepared["X_test"],
         y_test=prepared["y_test"],
     )
-    permutation_csv_path = processed_dir / f"{DATE_TAG}-final_model_permutation_importance.csv"
-    permutation_png_path = figures_dir / f"{DATE_TAG}-final_model_permutation_importance.png"
+    permutation_csv_path = processed_dir / f"{OUTPUT_PREFIX}_permutation_importance.csv"
+    permutation_png_path = figures_dir / f"{OUTPUT_PREFIX}_permutation_importance.png"
     permutation_df.to_csv(permutation_csv_path, index=False)
     save_permutation_importance_plot(permutation_df, permutation_png_path)
 
@@ -379,8 +435,8 @@ def main() -> None:
         X_test_t=X_test_t,
     )
 
-    shap_global_csv_path = processed_dir / f"{DATE_TAG}-final_model_shap_importance.csv"
-    shap_global_png_path = figures_dir / f"{DATE_TAG}-final_model_shap_beeswarm.png"
+    shap_global_csv_path = processed_dir / f"{OUTPUT_PREFIX}_shap_importance.csv"
+    shap_global_png_path = figures_dir / f"{OUTPUT_PREFIX}_shap_beeswarm.png"
     shap_importance_df = save_global_shap_outputs(
         shap_values=shap_values,
         output_plot_path=shap_global_png_path,
@@ -394,7 +450,7 @@ def main() -> None:
         case_indices=case_indices,
         x_test_index=X_test_t.index.tolist(),
     )
-    local_summary_csv_path = processed_dir / f"{DATE_TAG}-final_model_local_cases.csv"
+    local_summary_csv_path = processed_dir / f"{OUTPUT_PREFIX}_local_cases.csv"
     local_summary_df.to_csv(local_summary_csv_path, index=False)
 
     index_lookup = X_test_t.index.tolist()
@@ -405,12 +461,12 @@ def main() -> None:
             f"{case_name} - row {idx} - "
             f"{case_meta['departement']} / {case_meta['poste']}"
         )
-        output_path = figures_dir / f"{DATE_TAG}-final_model_{case_name}_waterfall.png"
+        output_path = figures_dir / f"{OUTPUT_PREFIX}_{case_name}_waterfall.png"
         save_local_waterfall_plot(explanation_row, output_path, title)
 
 
     diagnostics_dir = figures_dir / "final_model_diagnostics"
-    probability_plot_path = diagnostics_dir / f"{DATE_TAG}-final_model_probability_by_pred_type.png"
+    probability_plot_path = diagnostics_dir / f"{OUTPUT_PREFIX}_probability_errors_and_tp.png"
     numeric_diag_dir = diagnostics_dir / "numeric"
     categorical_diag_dir = diagnostics_dir / "categorical"
 
@@ -424,13 +480,14 @@ def main() -> None:
         show=False,
     )
 
+    probability_departures_plot_path = diagnostics_dir / f"{OUTPUT_PREFIX}_probability_tp_vs_fn.png"
     plot_probability_distrib_per_pred_type(
         model=model,
         X=prepared["X_test"],
         y=prepared["y_test"],
         threshold=FINAL_MODEL["threshold"],
-        categories_to_exclude=["true_negative","false_positive"],
-        save_path=probability_plot_path,
+        categories_to_exclude=["true_negative", "false_positive"],
+        save_path=probability_departures_plot_path,
         show=False,
     )
 
@@ -442,7 +499,7 @@ def main() -> None:
         threshold=FINAL_MODEL["threshold"],
         kind="kde",
         output_dir=numeric_diag_dir,
-        filename_prefix=f"{DATE_TAG}-numeric_",
+        filename_prefix=f"{OUTPUT_PREFIX}_numeric_",
         show=False,
     )
 
@@ -455,7 +512,7 @@ def main() -> None:
         normalize=True,
         top_n=8,
         output_dir=categorical_diag_dir,
-        filename_prefix=f"{DATE_TAG}-categorical_",
+        filename_prefix=f"{OUTPUT_PREFIX}_categorical_",
         show=False,
     )
 
@@ -466,6 +523,7 @@ def main() -> None:
     print(f"SHAP beeswarm PNG          : {shap_global_png_path}")
     print(f"Local cases CSV            : {local_summary_csv_path}")
     print(f"Probability diag PNG       : {probability_plot_path}")
+    print(f"Probability TP/FN PNG      : {probability_departures_plot_path}")
     print(f"Numeric diag PNG count     : {len(numeric_diag_paths)}")
     print(f"Categorical diag PNG count : {len(categorical_diag_paths)}")
     print("\n=== SELECTED LOCAL CASES ===")
