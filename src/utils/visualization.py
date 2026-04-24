@@ -10,6 +10,186 @@ from matplotlib.ticker import PercentFormatter, FuncFormatter, NullFormatter
 #* Analyse bivariée  *
 #*********************
 
+# ? ==== CORRELATION AVEC LA CIBLE ====
+
+def plot_top_spearman_corr(
+    df: pd.DataFrame,
+    target: str = "a_quitte_l_entreprise",
+    top_n: int = 10,
+    figsize: tuple = (9, 6),
+    pos_color: str = "#FFADA6",
+    neg_color: str = "#A7DEB7",
+):
+    # Corrélations de Spearman avec la cible
+    corr = (
+        df.corr(method="spearman", numeric_only=True)[target]
+        .drop(labels=[target], errors="ignore")
+        .dropna()
+    )
+
+    # On garde les variables les plus corrélées en valeur absolue
+    corr = corr.reindex(corr.abs().sort_values(ascending=False).head(top_n).index)
+
+    # Tri visuel pour le plot horizontal
+    corr = corr.sort_values(ascending=True)
+
+    plot_df = corr.reset_index()
+    plot_df.columns = ["feature", "correlation"]
+
+    # Labels plus propres
+    plot_df["feature_label"] = (
+        plot_df["feature"]
+        .str.replace("_", " ", regex=False)
+        .str.capitalize()
+    )
+
+    # Couleurs selon le signe
+    colors = [
+        pos_color if val > 0 else neg_color
+        for val in plot_df["correlation"]
+    ]
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    bars = ax.barh(
+        plot_df["feature_label"],
+        plot_df["correlation"],
+        color=colors,
+        edgecolor="#444444",
+        linewidth=0.8,
+        height=0.7,
+    )
+
+    # Ligne de référence
+    ax.axvline(0, color="#555555", linestyle="--", linewidth=1.2)
+
+    # Titre et labels
+    ax.set_title(
+        "Variables les plus corrélées à la cible",
+        fontsize=16,
+        weight="bold",
+        pad=12,
+    )
+    ax.set_xlabel("Corrélation de Spearman", fontsize=11)
+    ax.set_ylabel("Features")
+
+    # Grille légère
+    ax.grid(axis="x", linestyle="--", alpha=0.25)
+    ax.set_axisbelow(True)
+
+    # Nettoyage visuel
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    # Limites un peu aérées
+    max_abs = max(abs(plot_df["correlation"].min()), abs(plot_df["correlation"].max()))
+    ax.set_xlim(-max_abs * 1.20, max_abs * 1.20)
+
+    # Annotations
+    for bar, val in zip(bars, plot_df["correlation"]):
+        x = bar.get_width()
+        y = bar.get_y() + bar.get_height() / 2
+
+        if val >= 0:
+            ax.text(
+                x + max_abs * 0.03,
+                y,
+                f"{val:.3f}",
+                va="center",
+                ha="left",
+                fontsize=10,
+                color="#333333",
+            )
+        else:
+            ax.text(
+                x - max_abs * 0.03,
+                y,
+                f"{val:.3f}",
+                va="center",
+                ha="right",
+                fontsize=10,
+                color="#333333",
+            )
+
+    plt.tight_layout()
+    plt.show()
+
+    return corr
+
+# ? ===== CORRELATION FORTE ENTRE LES FEATURES =====
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def plot_strong_feature_correlations(
+    strong_corr: pd.DataFrame,
+    figsize: tuple = (10, 6),
+    pos_color: str = "#FFADA6",
+    neg_color: str = "#A7DEB7",
+):
+    df_plot = strong_corr.copy()
+
+    df_plot["pair_label"] = (
+        df_plot["level_0"].str.replace("_", " ", regex=False).str.capitalize()
+        + "  ↔  " +
+        df_plot["level_1"].str.replace("_", " ", regex=False).str.capitalize()
+    )
+
+    df_plot = df_plot.sort_values("corr", ascending=True)
+
+    colors = [
+        pos_color if val > 0 else neg_color
+        for val in df_plot["corr"]
+    ]
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    bars = ax.barh(
+        df_plot["pair_label"],
+        df_plot["corr"],
+        color=colors,
+        edgecolor="#444444",
+        linewidth=0.8,
+        height=0.7,
+    )
+
+    ax.axvline(0, color="#555555", linestyle="--", linewidth=1.2)
+
+    ax.set_title(
+        "Paires de variables fortement corrélées",
+        fontsize=16,
+        weight="bold",
+        pad=12,
+    )
+    ax.set_xlabel("Corrélation de Spearman", fontsize=11)
+    ax.set_ylabel("")
+
+    ax.grid(axis="x", linestyle="--", alpha=0.25)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    max_abs = df_plot["corr"].abs().max()
+    ax.set_xlim(-max_abs * 1.15, max_abs * 1.15)
+
+    for bar, val in zip(bars, df_plot["corr"]):
+        x = bar.get_width()
+        y = bar.get_y() + bar.get_height() / 2
+
+        ax.text(
+            x + (max_abs * 0.03 if val >= 0 else -max_abs * 0.03),
+            y,
+            f"{val:.2f}",
+            va="center",
+            ha="left" if val >= 0 else "right",
+            fontsize=10,
+            color="#333333",
+        )
+
+    plt.tight_layout()
+    plt.show()
+
 # ? ======  MODALITES NUMERIQUES ======
 
 def plot_attrition_by_num(
@@ -21,6 +201,7 @@ def plot_attrition_by_num(
     color: str = "#d5b5f5",
     # edgecolor: str = "#2F4B6E",
     annotate: bool = True,
+    show_range: bool = True
 ):
     # Copie de travail
     tmp_df = df[[col, target]].dropna().copy()
@@ -92,19 +273,20 @@ def plot_attrition_by_num(
             )
 
     # Sous-titre discret avec bornes réelles
-    ranges_txt = "   ".join(
-        [
-            f"{lbl}: [{left:.0f} ; {right:.0f}]"
-            for lbl, left, right in zip(agg["bin_label"], agg["left"], agg["right"])
-        ]
-    )
-    fig.text(
-        0.5, -0.02,
-        f"Classes en quantiles — {ranges_txt}",
-        ha="center",
-        fontsize=9,
-        color="dimgray"
-    )
+    if show_range:
+        ranges_txt = "   ".join(
+            [
+                f"{lbl}: [{left:.0f} ; {right:.0f}]"
+                for lbl, left, right in zip(agg["bin_label"], agg["left"], agg["right"])
+            ]
+        )
+        fig.text(
+            0.5, -0.02,
+            f"Classes en quantiles — {ranges_txt}",
+            ha="center",
+            fontsize=9,
+            color="dimgray"
+        )
 
     plt.tight_layout()
     plt.show()
@@ -216,7 +398,7 @@ color_palette = {
 
 #? PROFILS COMBINES
 
-def plot_attrition_heatmaps_ppt(df_multivar, target="a_quitte_l_entreprise"):
+def plot_attrition_heatmaps(df_multivar, target="a_quitte_l_entreprise"):
     sns.set_theme(style="white")
 
     fig, axes = plt.subplots(1, 2, figsize=(18, 7))
@@ -310,12 +492,12 @@ def plot_attrition_heatmaps_ppt(df_multivar, target="a_quitte_l_entreprise"):
 
 #? Analyse des odds ratios
 
-def plot_odds_ratios_ppt(or_plot):
+def plot_odds_ratios(or_plot):
     plot_df = or_plot.sort_values("odds_ratio", ascending=True).copy()
 
     palette = {
-        "Association négative avec l'attrition": "#d5b5f5",
-        "Association positive avec l'attrition": "#a7deb7",
+        "OR > 1 : Association positive avec l'attrition": "#d5b5f5",
+        "OR < 1 : Association négative avec l'attrition": "#a7deb7",
     }
 
     fig, ax = plt.subplots(figsize=(10, 7))
