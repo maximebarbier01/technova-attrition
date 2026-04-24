@@ -42,7 +42,7 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df = _ensure_satisfaction_global(df)
 
-    # Categorical buckets used in several feature sets.
+    # Tranches de modalité numériques (buckets/bin)
     df['age_bucket'] = pd.cut(
         df['age'],
         bins=[0, 30, 45, 100],
@@ -56,7 +56,7 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
         duplicates='drop',
     ).astype('string')
 
-    # Shared aggregates used to contextualize salary, satisfaction, promotion and training.
+    # Données agrégés pour mettre en perspective les variables par rapport aux postes 
     poste_salary_median = df.groupby('poste')['revenu_mensuel'].transform('median')
     poste_satisfaction_mean = df.groupby('poste')['satisfaction_global'].transform('mean')
     poste_promotion_median = df.groupby('poste')[
@@ -66,8 +66,7 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
         'nb_formations_suivies'
     ].transform('median')
 
-    # Keep helper masks local: they are useful to build business features but are not
-    # part of the final feature sets themselves.
+    # Salaire au niveau local
     salary_vs_level = df['revenu_mensuel'] / (df['niveau_hierarchique_poste'] + 1)
     low_salary_for_job = df['revenu_mensuel'] < poste_salary_median
     salary_underpaid = salary_vs_level < 1500
@@ -86,7 +85,7 @@ def make_feature_engineering(df: pd.DataFrame) -> pd.DataFrame:
     is_tech_profile = df['domaine_etude'].isin(TECH_PROFILES)
     frequent_travel = df['frequence_deplacement'].eq('Frequent')
 
-    # Core engineered signals.
+    # Signaux conçus sur mesure (après EDA)
     df['salary_vs_level'] = salary_vs_level
     df['experience_mismatch'] = (
         df['annee_experience_totale'] - df['annees_dans_le_poste_actuel']

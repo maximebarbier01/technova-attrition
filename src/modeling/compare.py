@@ -9,6 +9,7 @@ from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
     confusion_matrix,
+    fbeta_score,
     f1_score,
     precision_recall_curve,
     precision_score,
@@ -48,6 +49,11 @@ def _safe_prc_auc(y_true, y_proba):
     # Keep the historical column name `prc_auc`, but align its value with
     # the project's tuning metric: sklearn average_precision.
     return average_precision_score(y_true, y_proba)
+
+
+def _safe_fbeta(y_true, y_pred, beta: float) -> float:
+    """Compute F-beta while handling zero-division safely."""
+    return fbeta_score(y_true, y_pred, beta=beta, zero_division=0)
 
 
 def _get_threshold_independent_metrics_from_proba(y_true, y_proba) -> dict:
@@ -102,6 +108,7 @@ def _build_threshold_unavailable_result(
         "precision_1": None,
         "recall_1": None,
         "f1_1": None,
+        "f2_1": None,
         "tn": None,
         "fp": None,
         "fn": None,
@@ -117,6 +124,7 @@ def _build_threshold_unavailable_result(
                 "train_precision_1": None,
                 "train_recall_1": None,
                 "train_f1_1": None,
+                "train_f2_1": None,
                 "train_tn": None,
                 "train_fp": None,
                 "train_fn": None,
@@ -142,6 +150,7 @@ def evaluate_binary_classifier(model, X_eval, y_eval, threshold=0.5) -> dict:
         "precision_1": precision_score(y_eval, y_pred, zero_division=0),
         "recall_1": recall_score(y_eval, y_pred, zero_division=0),
         "f1_1": f1_score(y_eval, y_pred, zero_division=0),
+        "f2_1": _safe_fbeta(y_eval, y_pred, beta=2),
         "roc_auc": _safe_roc_auc(y_eval, y_proba),
         "prc_auc": _safe_prc_auc(y_eval, y_proba),
         "tn": tn,
@@ -151,7 +160,7 @@ def evaluate_binary_classifier(model, X_eval, y_eval, threshold=0.5) -> dict:
     }
 
 
-def find_best_threshold(model, X_eval, y_eval, metric="f1"):
+def find_best_threshold(model, X_eval, y_eval, metric="f2"):
     """Rechercher le seuil optimal directement sur un ensemble d'évaluation donné pour un indicateur choisi.
 
     Cette méthode est simple mais moins rigoureuse que l'approche CV/OOF, car le même ensemble est utilisé à la fois pour choisir le seuil et pour évaluer les performances.
@@ -164,7 +173,9 @@ def find_best_threshold(model, X_eval, y_eval, metric="f1"):
     for threshold in np.linspace(0.01, 0.99, 999):
         y_pred = (y_proba >= threshold).astype(int)
 
-        if metric == "f1":
+        if metric == "f2":
+            score = _safe_fbeta(y_eval, y_pred, beta=2)
+        elif metric == "f1":
             score = f1_score(y_eval, y_pred, zero_division=0)
         elif metric == "precision":
             score = precision_score(y_eval, y_pred, zero_division=0)
@@ -188,6 +199,7 @@ def get_precision_recall_thresholds_from_proba(y_true, y_proba) -> pd.DataFrame:
     precision = precision[:-1]
     recall = recall[:-1]
     f1 = 2 * (precision * recall) / (precision + recall + 1e-12)
+    f2 = 5 * (precision * recall) / ((4 * precision) + recall + 1e-12)
 
     return pd.DataFrame(
         {
@@ -195,6 +207,7 @@ def get_precision_recall_thresholds_from_proba(y_true, y_proba) -> pd.DataFrame:
             "precision": precision,
             "recall": recall,
             "f1": f1,
+            "f2": f2,
         }
     )
 
@@ -205,7 +218,7 @@ def get_precision_recall_thresholds(model, X_eval, y_eval) -> pd.DataFrame:
     return get_precision_recall_thresholds_from_proba(y_true=y_eval, y_proba=y_proba)
 
 
-def find_best_threshold_from_pr_curve(model, X_eval, y_eval, metric="f1") -> dict:
+def find_best_threshold_from_pr_curve(model, X_eval, y_eval, metric="f2") -> dict:
     """Choisissez le meilleur seuil à partir de la courbe précision-rappel d'un ensemble d'évaluation"""
     pr_df = get_precision_recall_thresholds(model, X_eval, y_eval)
 
@@ -220,6 +233,7 @@ def find_best_threshold_from_pr_curve(model, X_eval, y_eval, metric="f1") -> dic
         "best_precision": float(best_row["precision"]),
         "best_recall": float(best_row["recall"]),
         "best_f1": float(best_row["f1"]),
+        "best_f2": float(best_row["f2"]),
     }
 
 
@@ -236,7 +250,7 @@ def find_threshold_for_target_recall(model, X_eval, y_eval, target_recall=0.80):
 def find_best_threshold_from_proba(
     y_true,
     y_proba,
-    metric="f1",
+    metric="f2",
 ) -> dict:
     """Choisissez le meilleur seuil parmi les probabilités précalculées plutôt que de réajuster le modèle."""
     pr_df = get_precision_recall_thresholds_from_proba(y_true=y_true, y_proba=y_proba)
@@ -252,6 +266,7 @@ def find_best_threshold_from_proba(
         "best_precision": float(best_row["precision"]),
         "best_recall": float(best_row["recall"]),
         "best_f1": float(best_row["f1"]),
+        "best_f2": float(best_row["f2"]),
     }
 
 
@@ -274,6 +289,7 @@ def find_threshold_for_target_recall_from_proba(
         "precision": float(best_row["precision"]),
         "recall": float(best_row["recall"]),
         "f1": float(best_row["f1"]),
+        "f2": float(best_row["f2"]),
     }
 
 #* ===============================================
@@ -387,8 +403,8 @@ def compare_models_with_optimal_threshold(
     trained_models,
     X_test,
     y_test,
-    metric="f1",
-    sort_by="f1_1",
+    metric="f2",
+    sort_by="f2_1",
     X_train=None,
     y_train=None,
 ):
@@ -440,8 +456,8 @@ def compare_models_with_pr_optimal_threshold(
     trained_models,
     X_test,
     y_test,
-    metric="f1",
-    sort_by="f1_1",
+    metric="f2",
+    sort_by="f2_1",
     X_train=None,
     y_train=None,
 ):
@@ -478,6 +494,7 @@ def compare_models_with_pr_optimal_threshold(
         metrics["best_precision_curve"] = best_info["best_precision"]
         metrics["best_recall_curve"] = best_info["best_recall"]
         metrics["best_f1_curve"] = best_info["best_f1"]
+        metrics["best_f2_curve"] = best_info["best_f2"]
         results.append(metrics)
 
     results_df = pd.DataFrame(results)
@@ -566,8 +583,8 @@ def compare_models_with_cv_pr_optimal_threshold(
     y_train,
     X_test,
     y_test,
-    metric="f1",
-    sort_by="f1_1",
+    metric="f2",
+    sort_by="f2_1",
     model_specs: dict | None = None,
     oof_proba_by_model: dict[str, np.ndarray] | None = None,
     cv: int = 5,
@@ -619,6 +636,7 @@ def compare_models_with_cv_pr_optimal_threshold(
         metrics["cv_best_precision_curve"] = best_info["best_precision"]
         metrics["cv_best_recall_curve"] = best_info["best_recall"]
         metrics["cv_best_f1_curve"] = best_info["best_f1"]
+        metrics["cv_best_f2_curve"] = best_info["best_f2"]
         results.append(metrics)
 
     results_df = pd.DataFrame(results)
@@ -702,6 +720,7 @@ def compare_models_with_cv_target_recall(
         metrics["cv_precision_curve"] = threshold_info["precision"]
         metrics["cv_recall_curve"] = threshold_info["recall"]
         metrics["cv_f1_curve"] = threshold_info["f1"]
+        metrics["cv_f2_curve"] = threshold_info["f2"]
         results.append(metrics)
 
     results_df = pd.DataFrame(results)
