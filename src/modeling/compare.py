@@ -592,7 +592,7 @@ def compare_models_with_cv_pr_optimal_threshold(
 ):
     """Comparez les modèles après avoir déterminé le seuil à partir des probabilités OOF sur le jeu d'entraînement (train) et l'avoir appliqué une seule fois sur le jeu de test.
 
-    Il s'agit de la méthode recommandée lorsque vous souhaitez obtenir un seuil basé sur les données sans divulguer d'informations sur le jeu de test.
+    Méthode recommandée lorsque qu'on souhaite obtenir un seuil basé sur les données sans divulguer d'informations sur le jeu de test.
     """
     if oof_proba_by_model is None:
         if model_specs is None:
